@@ -1,0 +1,16 @@
+{
+  "name": "Top Academy – Smart Swimmer Nutrition",
+  "short_name": "Top Nutrition",
+  "description": "منصة Top Academy الذكية لإدارة التغذية الرياضية للسباحين",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a2438",
+  "theme_color": "#0a2438",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

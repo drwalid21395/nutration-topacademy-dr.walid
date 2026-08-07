@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ocean-950: #0a2438;
+  --ocean-900: #0e3552;
+  --ocean-700: #155480;
+  --ocean-500: #1d84bc;
+  --ocean-300: #7cc0e5;
+  --gold-500: #d9a23a;
+  --lagoon-500: #17a8ab;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-slate-50 text-slate-800 font-sans antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(29, 132, 188, 0.25);
+}
+
+/* شريط تمرير أنيق */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #eef2f6;
+}
+::-webkit-scrollbar-thumb {
+  background: #b6c9d8;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8fb0c7;
+}
+
+@layer components {
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-ocean-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-ocean-600/20 transition-all hover:bg-ocean-700 hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-2.5 text-sm font-bold text-ocean-700 ring-1 ring-inset ring-ocean-200 transition-all hover:bg-ocean-50 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-gold {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gold-500 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-gold-500/25 transition-all hover:bg-gold-600 active:scale-[0.98] disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50;
+  }
+
+  .card {
+    @apply rounded-2xl border border-slate-200/70 bg-white p-5 shadow-card;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-lg;
+  }
+
+  .input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-ocean-500 focus:outline-none focus:ring-2 focus:ring-ocean-500/20 transition;
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-semibold text-slate-700;
+  }
+
+  .section-title {
+    @apply text-2xl font-extrabold text-ocean-900 sm:text-3xl;
+  }
+
+  .prose-arabic {
+    @apply text-slate-700 leading-relaxed;
+  }
+
+  .prose-arabic h2 {
+    @apply mt-8 mb-3 text-xl font-bold text-ocean-900;
+  }
+  .prose-arabic h3 {
+    @apply mt-6 mb-2 text-lg font-bold text-ocean-800;
+  }
+  .prose-arabic p {
+    @apply my-3;
+  }
+  .prose-arabic ul {
+    @apply my-3 list-disc pr-6 space-y-1.5;
+  }
+  .prose-arabic ol {
+    @apply my-3 list-decimal pr-6 space-y-1.5;
+  }
+}
+
+/* حركات الدخول */
+.fade-in {
+  animation: fade-up 0.5s ease-out both;
+}
+
+/* نمط التموجات المائية في الخلفية */
+.water-bg {
+  background-color: #eef7fc;
+  background-image:
+    radial-gradient(ellipse at 20% 0%, rgba(125, 192, 229, 0.25), transparent 50%),
+    radial-gradient(ellipse at 80% 10%, rgba(23, 168, 171, 0.12), transparent 40%);
+}
+
+/* نموذج الطباعة لملفات PDF/الطباعة */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  .print-block {
+    display: block !important;
+  }
+}

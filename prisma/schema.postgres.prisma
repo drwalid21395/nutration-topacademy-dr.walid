@@ -1,0 +1,754 @@
+// ============================================================
+// Top Academy – Smart Swimmer Nutrition — Prisma Schema
+// الإصدار: PostgreSQL (الإنتاج)
+// للتبديل إلى SQLite استخدم: npm run db:sqlite
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------- المستخدمون والأدوار ----------------
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified DateTime?
+  phone         String?
+  passwordHash  String
+  image         String?
+  role          String   @default("athlete") // athlete | guardian | coach | dietitian | admin
+  status        String   @default("active") // active | suspended | deleted
+  isAdult       Boolean?
+  parentalConsent Boolean @default(false)
+  parentName    String?
+  parentPhone   String?
+  parentEmail   String?
+  acceptTerms   Boolean  @default(false)
+  acceptPrivacy Boolean  @default(false)
+  lastLoginAt   DateTime?
+  resetToken    String?
+  resetTokenExp DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  profiles       SwimmerProfile[]
+  mealPlans      MealPlan[]
+  foodLogs       FoodLogEntry[]
+  waterLogs      WaterLogEntry[]
+  trainingLogs   TrainingLogEntry[]
+  recoveryLogs   RecoveryLogEntry[]
+  weightLogs     WeightLogEntry[]
+  mealAnalyses   MealAnalysis[]
+  photos         Photo[]
+  notifications  Notification[]
+  notificationPrefs NotificationPref?
+  competitions   Competition[]
+  auditLogs      AuditLog[]
+  receivedMessages Message[] @relation("ToUser")
+  sentMessages   Message[]   @relation("FromUser")
+  coachingRelations CoachRelation[] @relation("CoachUser")
+  athleteRelations  CoachRelation[] @relation("AthleteUser")
+  supplementsReads SupplementAck[]
+  supplementProducts SupplementProduct[]
+  medications     Medication[]
+  labResults      LabResult[]
+  supplementAssessments SupplementAssessment[]
+  supplementIntakeLogs SupplementIntakeLog[]
+  supplementNotifications SupplementNotification[]
+  supplementApprovals SupplementApproval[] @relation("SupplementApprover")
+}
+
+// ---------------- ملف السباح ----------------
+
+model SwimmerProfile {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName    String
+  gender      String
+  birthDate   DateTime?
+  age         Int?
+  heightCm    Float?
+  weightKg    Float?
+  targetWeightKg Float?
+  bodyFatPercent Float?
+  waistCm     Float?
+  country     String?
+  timezone    String?
+  ageGroup    String?
+  swimmerLevel String?
+  specialty   String?
+  mainDistances String?
+  personalBests String?
+  nextCompetitionDate DateTime?
+
+  swimSessionsPerWeek  Int?
+  swimMinutesPerSession Int?
+  trainingIntensity    String?
+  swimDistancePerSession Int?
+  gymSessionsPerWeek   Int?
+  gymMinutesPerSession Int?
+  gymType              String?
+  restDays             String?
+  trainingTime         String?
+  hasDoubleTraining    Boolean @default(false)
+  sleepHours           Float?
+  dailyActivityLevel   String?
+
+  goal                String?
+  allergies           String?
+  dislikedFoods       String?
+  dietType            String?
+  preferredMealsPerDay Int?
+  budgetLevel         String?
+  availableFoods      String?
+  chronicConditions   String?
+  medications         String?
+  currentInjuries     String?
+  digestiveIssues     String?
+  pregnancyStatus     String?
+  isMinor             Boolean @default(false)
+  guardianData        String?
+  notes               String?
+  medicalAlert        Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mealPlans   MealPlan[]
+  competitions Competition[]
+  nutritionTargets NutritionTargets[]
+}
+
+// ---------------- نتائج الحسابات الغذائية ----------------
+
+model NutritionTargets {
+  id             String  @id @default(cuid())
+  profileId      String
+  profile        SwimmerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  bmi            Float?
+  bmiCategory    String?
+  bmr            Float?
+  tdee           Float?
+  calories       Float?
+  calorieMin     Float?
+  calorieMax     Float?
+  proteinG       Float?
+  carbsG         Float?
+  fatG           Float?
+  fiberG         Float?
+  waterMl        Float?
+  trainingWaterMl Float?
+  sodiumMg       Float?
+  proteinPct     Float?
+  carbsPct       Float?
+  fatPct         Float?
+  mealCalories   String? // توزيع السعرات على الوجبات (JSON)
+  trainingCalories String? // السعرات المستهلكة في التمرين (JSON)
+  formula        String? // المعادلة المستخدمة
+  recommendations String? // توصيات أيام التدريب/الراحة/البطولة (JSON)
+  createdAt      DateTime @default(now())
+
+  mealPlans MealPlan[]
+}
+
+// ---------------- قاعدة بيانات الطعام ----------------
+
+model FoodCategory {
+  id        String  @id @default(cuid())
+  nameAr    String
+  nameEn    String?
+  sortOrder Int     @default(0)
+  foods     FoodItem[]
+}
+
+model FoodItem {
+  id           String  @id @default(cuid())
+  nameAr       String
+  nameEn       String?
+  categoryId   String?
+  category     FoodCategory? @relation(fields: [categoryId], references: [id])
+  portionLabel String?
+  gramsPerPortion Float?
+  calories     Float?
+  proteinG     Float?
+  carbsG       Float?
+  fatG         Float?
+  fiberG       Float?
+  sugarsG      Float?
+  sodiumMg     Float?
+  ingredients  String?
+  allergens    String?
+  cookingMethod String?
+  imageUrl     String?
+  similarTo    String?
+  region       String?
+  isPreWorkout  Boolean @default(false)
+  isPostWorkout Boolean @default(false)
+  isCompetition Boolean @default(false)
+  isKidFriendly Boolean @default(true)
+  isVegetarian  Boolean @default(false)
+  hasLactose    Boolean @default(false)
+  hasGluten     Boolean @default(false)
+  isCommon      Boolean @default(false)
+  isActive      Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  planItems MealItem[]
+}
+
+// ---------------- الخطط الغذائية ----------------
+
+model MealPlan {
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId     String?
+  profile       SwimmerProfile? @relation(fields: [profileId], references: [id])
+  competitionId String? @unique
+  competition   Competition? @relation(fields: [competitionId], references: [id])
+  targetsId     String?
+  targets       NutritionTargets? @relation(fields: [targetsId], references: [id])
+  title         String
+  durationDays  Int     @default(7)
+  planType      String?
+  goal          String?
+  totalCalories Float?
+  proteinG      Float?
+  carbsG        Float?
+  fatG          Float?
+  waterMl       Float?
+  mealsPerDay   Int     @default(5)
+  isCompetitionMode Boolean @default(false)
+  isActive      Boolean @default(false)
+  version       Int     @default(1)
+  generatedWith String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  meals     Meal[]
+  reports   Report[]
+}
+
+model Meal {
+  id        String   @id @default(cuid())
+  planId    String
+  plan      MealPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  dayNumber Int      @default(1)
+  mealType  String
+  title     String
+  timing    String?
+  calories  Float?
+  proteinG  Float?
+  carbsG    Float?
+  fatG      Float?
+  note      String?
+  items     MealItem[]
+
+  @@index([planId, dayNumber])
+}
+
+model MealItem {
+  id        String @id @default(cuid())
+  mealId    String
+  meal      Meal   @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  foodId    String?
+  food      FoodItem? @relation(fields: [foodId], references: [id])
+  foodNameAr String
+  quantity  String?
+  grams     Float?
+  calories  Float?
+  proteinG  Float?
+  carbsG    Float?
+  fatG      Float?
+  isAlternative Boolean @default(false)
+  alternativeType String?
+}
+
+// ---------------- السجل اليومي ----------------
+
+model FoodLogEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @default(now())
+  mealType  String?
+  foodName  String
+  grams     Float?
+  calories  Float?
+  proteinG  Float?
+  carbsG    Float?
+  fatG      Float?
+  fiberG    Float?
+  sodiumMg  Float?
+  waterMl   Float?
+  source    String @default("manual")
+  analysisId String? @unique
+  analysis   MealAnalysis? @relation(fields: [analysisId], references: [id])
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model WaterLogEntry {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date   DateTime @default(now())
+  amountMl Float
+  note   String?
+  createdAt DateTime @default(now())
+}
+
+model TrainingLogEntry {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime @default(now())
+  sessionType String
+  durationMin Int?
+  distanceM   Int?
+  intensity   String?
+  caloriesBurned Float?
+  note        String?
+  createdAt   DateTime @default(now())
+}
+
+model RecoveryLogEntry {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime @default(now())
+  sleepHours  Float?
+  energyLevel Int?
+  hungerLevel Int?
+  stressLevel Int?
+  recoveryLevel Int?
+  weightKg    Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+}
+
+model WeightLogEntry {
+  id      String  @id @default(cuid())
+  userId  String
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date    DateTime @default(now())
+  weightKg Float
+  note    String?
+  createdAt DateTime @default(now())
+}
+
+// ---------------- تحليل الوجبات بالكاميرا ----------------
+
+model Photo {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url       String
+  storageKey String?
+  analysisConsent Boolean @default(true)
+  autoDeleteAt DateTime?
+  analysis  MealAnalysis?
+  createdAt DateTime @default(now())
+}
+
+model MealAnalysis {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photoId     String? @unique
+  photo       Photo?  @relation(fields: [photoId], references: [id])
+  provider    String @default("mock")
+  rawResponse String? // استجابة المزود (JSON)
+  foods      String? // قائمة الأطعمة المكتشفة (JSON)
+  totalCalories Float?
+  totalProteinG Float?
+  totalCarbsG   Float?
+  totalFatG     Float?
+  totalFiberG   Float?
+  totalSodiumMg Float?
+  confidence Float?
+  isEstimate Boolean @default(true)
+  needsReview Boolean @default(false)
+  notes     String?
+  loggedAs  FoodLogEntry?
+  createdAt DateTime @default(now())
+}
+
+// ---------------- البطولات ----------------
+
+model Competition {
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId     String?
+  profile       SwimmerProfile? @relation(fields: [profileId], references: [id])
+  name          String
+  startDate     DateTime
+  endDate       DateTime?
+  location      String?
+  expectedTemp  String?
+  foodAvailableAtVenue Boolean @default(true)
+  races         String? // تفاصيل السباقات والمواعيد (JSON)
+  weighInTime   DateTime?
+  warmUpTime    DateTime?
+  plan          MealPlan?
+  checklist     String? // JSON
+  bagList       String? // JSON
+  isActive      Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ---------------- الإشعارات والتنبيهات ----------------
+
+model NotificationPref {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  breakfastTime String?
+  lunchTime     String?
+  dinnerTime    String?
+  snackTimes    String?
+  preWorkoutTime String?
+  postWorkoutTime String?
+  waterInterval Int?
+  trainingTime  String?
+  sleepTime     String?
+  weighInTime   String?
+  competitionReminderDays Int?
+  planReviewReminderDays Int?
+  soundEnabled  Boolean @default(false)
+  quietHoursStart String?
+  quietHoursEnd String?
+  pushEnabled   Boolean @default(false)
+  inAppEnabled  Boolean @default(true)
+  smartAlerts   Boolean @default(true)
+  waterLowAlertThreshold Int?
+  days          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String?
+  channel   String @default("inapp")
+  isRead    Boolean @default(false)
+  isDismissed Boolean @default(false)
+  scheduledFor DateTime?
+  sentAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+// ---------------- المكملات (محتوى تثقيفي) ----------------
+
+model Supplement {
+  id             String  @id @default(cuid())
+  nameAr         String
+  nameEn         String?
+  category       String?
+  descriptionAr  String?
+  functionAr     String? // وظيفته المحتملة
+  consideredCasesAr String? // متى يُنظر فيه
+  avoidGroupsAr  String? // الفئات التي تتجنبه
+  sideEffectsAr  String?
+  interactionsAr String?
+  needsLabTest   Boolean @default(false)
+  needsMedicalSupervision Boolean @default(false)
+  naturalAlternativesAr String?
+  isProhibitedRisk Boolean @default(false)
+  sortOrder      Int @default(0)
+  isActive       Boolean @default(true)
+
+  // ملف علمي للحاسبة الذكية
+  key               String? // معرف برمجي ثابت (protein, creatine, caffeine, …)
+  scientificName    String?
+  evidenceStrength  String? // A | B | C | D
+  minAge            Int?
+  suitableForMinors Boolean @default(false)
+  needsRx           Boolean @default(false) // وصفة/إشراف طبي إلزامي
+  linkedToWeight    Boolean @default(false)
+  linkedToTraining  Boolean @default(false)
+  linkedToCompetition Boolean @default(false)
+  doseUnit          String? // g | mg | scoop | cup
+  minDose           Float?
+  maxDose           Float?
+  safeUpperLimit    Float? // حد أعلى آمن يوقظ تحذيرًا قبله
+  timingAr          String?
+  relationToMealsAr String?
+  durationDays      Int?
+  stopPeriodAr      String?
+  medicationInteractionsAr String?
+  supplementInteractionsAr String?
+  contraindicationsAr String?
+  stopSymptomsAr    String?
+  dopingRisk        String? // none | low | medium | high | prohibited | unknown
+  thirdPartyTestedRecommended Boolean @default(false)
+  referencesAr      String?
+  lastInfoUpdate    DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  acknowledgements SupplementAck[]
+}
+
+model SupplementAck {
+  id           String  @id @default(cuid())
+  userId       String
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supplementId String
+  supplement   Supplement @relation(fields: [supplementId], references: [id], onDelete: Cascade)
+  acknowledgeConsulting Boolean @default(false)
+  createdAt    DateTime @default(now())
+}
+
+// ---------------- حاسبة المكملات الذكية ----------------
+
+model SupplementIngredient {
+  id          String  @id @default(cuid())
+  nameAr      String
+  nameEn      String
+  unit        String // g | mg
+  upperLimit  Float? // حد أعلى آمن يومي
+  severeLimit Float?
+  sourceAr    String?
+  createdAt   DateTime @default(now())
+}
+
+model SupplementProduct {
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  brand         String?
+  ingredientsJson String? // [{name, amount, unit}] — لكشف التكرار والحدود
+  batchNumber   String?
+  batchVerified Boolean @default(false)
+  thirdPartyTested Boolean @default(false)
+  dopingRisk    String  @default("unknown") // none | low | medium | high | prohibited | unknown
+  expiryDate    DateTime?
+  dailyDose     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Medication {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  purpose   String?
+  dosage    String?
+  frequency String?
+  createdAt DateTime @default(now())
+}
+
+model LabResult {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  marker         String // hemoglobin | ferritin | iron | transferrin | vitaminD | b12 | folate | calcium | magnesium | kidney | liver | thyroid | glucose
+  markerAr       String?
+  value          Float
+  unit           String
+  referenceRange String?
+  testDate       DateTime
+  notes          String?
+  uploadedUrl    String?
+  createdAt      DateTime @default(now())
+}
+
+model SupplementAssessment {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId            String?
+  version              String   @default("1.0")
+  status               String   @default("calculated") // calculated | needs-review | approved | rejected | adjusted
+  overallLevel         String   @default("none") // none | low | medium | specialist
+  needsMedicalApproval Boolean  @default(false)
+  needsGuardianConsent Boolean  @default(false)
+  needsLabTest         Boolean  @default(false)
+  coverage             String? // JSON
+  eligibility          String? // JSON
+  proteinGap           String? // JSON
+  hydration            String? // JSON
+  recommendations      String? // JSON
+  schedule             String? // JSON
+  foodAlternatives     String? // JSON
+  reassessAt           DateTime?
+  createdAt            DateTime @default(now())
+  recommendationItems  SupplementRecommendation[]
+  approvals            SupplementApproval[]
+}
+
+model SupplementRecommendation {
+  id               String @id @default(cuid())
+  assessmentId     String
+  assessment       SupplementAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  supplementKey    String
+  nameAr           String
+  status           String @default("needs-review") // food-first | needs-review | approved | rejected | blocked
+  eligibilityVerdict String
+  evidenceStrength String?
+  coverageFromFood Float?
+  deficit          Float?
+  doseEstimate     Float?
+  doseUnit         String?
+  timingAr         String?
+  durationDays     Int?
+  upperLimitWarning String?
+  medicalNote      String?
+  approvedById     String?
+  approvedAt       DateTime?
+  createdAt        DateTime @default(now())
+}
+
+model SupplementApproval {
+  id           String   @id @default(cuid())
+  assessmentId String
+  assessment   SupplementAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  approverId   String
+  approver     User     @relation("SupplementApprover", fields: [approverId], references: [id], onDelete: Cascade)
+  action       String // approved | rejected | adjusted
+  notes        String?
+  signature    String?
+  createdAt    DateTime @default(now())
+}
+
+model SupplementIntakeLog {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId       String?
+  supplementName  String
+  doseAmount      Float
+  doseUnit        String
+  timeTaken       DateTime?
+  withFood        Boolean  @default(true)
+  compliant       Boolean  @default(true)
+  sideEffects     String?
+  energyLevel     Int?
+  sleepQuality    Int?
+  recoveryLevel   Int?
+  performanceLevel Int?
+  stomachIssues   String?
+  weightChangeKg  Float?
+  athleteNotes    String?
+  coachNotes      String?
+  specialistNotes String?
+  logDate         DateTime @default(now())
+}
+
+model SupplementNotification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String // reminder | interaction | reanalysis | expiry | competition
+  title       String
+  body        String?
+  isRead      Boolean  @default(false)
+  scheduledFor DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model SupplementReference {
+  id             String   @id @default(cuid())
+  supplementKey  String
+  organization   String
+  year           Int?
+  title          String
+  url            String?
+  noteAr         String?
+  createdAt      DateTime @default(now())
+}
+
+// ---------------- التواصل والتدريب ----------------
+
+model CoachRelation {
+  id        String  @id @default(cuid())
+  coachId   String
+  coach     User    @relation("CoachUser", fields: [coachId], references: [id], onDelete: Cascade)
+  athleteId String
+  athlete   User    @relation("AthleteUser", fields: [athleteId], references: [id], onDelete: Cascade)
+  status    String @default("pending")
+  canEditPlan Boolean @default(false)
+  canViewHealth Boolean @default(false)
+  nextReviewAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@unique([coachId, athleteId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  fromId    String
+  from      User     @relation("FromUser", fields: [fromId], references: [id], onDelete: Cascade)
+  toId      String
+  to        User     @relation("ToUser", fields: [toId], references: [id], onDelete: Cascade)
+  body      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ---------------- التقارير ----------------
+
+model Report {
+  id        String   @id @default(cuid())
+  userId    String
+  planId    String?
+  plan      MealPlan? @relation(fields: [planId], references: [id])
+  type      String @default("weekly")
+  title     String
+  summary   String? // JSON
+  pdfUrl    String?
+  version   String?
+  createdAt DateTime @default(now())
+}
+
+// ---------------- المحتوى والإدارة ----------------
+
+model ContentPage {
+  id      String @id @default(cuid())
+  slug    String @unique
+  titleAr String
+  bodyAr  String
+  published Boolean @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model SiteSetting {
+  id      String @id @default(cuid())
+  key     String @unique
+  value   String?
+  json    String? // JSON
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  ip        String?
+  metadata  String? // JSON
+  createdAt DateTime @default(now())
+}
