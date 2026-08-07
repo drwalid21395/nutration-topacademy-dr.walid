@@ -26,8 +26,10 @@ export function MealAnalyzer({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const captureInputRef = useRef<HTMLInputElement>(null);
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraRequesting, setCameraRequesting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -41,22 +43,52 @@ export function MealAnalyzer({
     return () => stopCamera();
   }, []);
 
+  function getMediaWithTimeout(constraints: MediaStreamConstraints, ms: number) {
+    return new Promise<MediaStream>((resolve, reject) => {
+      const t = setTimeout(
+        () => reject(new DOMException('استغرقت عملية فتح الكاميرا وقتًا طويلًا', 'TimeoutError')),
+        ms
+      );
+      navigator.mediaDevices.getUserMedia(constraints).then(
+        (s) => {
+          clearTimeout(t);
+          resolve(s);
+        },
+        (e) => {
+          clearTimeout(t);
+          reject(e);
+        }
+      );
+    });
+  }
+
   async function startCamera() {
     setCameraError(null);
     setCameraReady(false);
+    setCameraRequesting(true);
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraError('المتصفح لا يدعم الكاميرا على هذا الرابط. استخدم HTTPS أو localhost.');
         return;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      let stream: MediaStream | null = null;
+      try {
+        // جرّب الكاميرا الخلفية أولًا (مثالية لتصوير الوجبة من الجوال)
+        stream = await getMediaWithTimeout(
+          {
+            video: {
+              facingMode: 'environment',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+            audio: false,
+          },
+          15000
+        );
+      } catch {
+        // الكاميرا الخلفية غير متاحة (كمبيوتر/بعض الأجهزة) — استخدم أي كاميرا افتراضية
+        stream = await getMediaWithTimeout({ video: true, audio: false }, 15000);
+      }
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
@@ -70,13 +102,19 @@ export function MealAnalyzer({
     } catch (err) {
       const name = err instanceof DOMException ? err.name : '';
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-        setCameraError('رُفض إذن الكاميرا. امنح الإذن من شريط المتصفح ثم حاول مجددًا.');
+        setCameraError('رُفض إذن الكاميرا. اضغط أيقونة القفل في شريط العنوان ثم اسمح بالكاميرا وحاول مجددًا.');
       } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-        setCameraError('لم يُعثر على كاميرا متاحة. تأكد من توصيلها أو استخدم رفع صورة من الجهاز.');
+        setCameraError('لم يُعثر على كاميرا متاحة. استخدم زر «التقاط بالكاميرا» أو رفع صورة من الجهاز.');
+      } else if (name === 'OverconstrainedError') {
+        setCameraError('الكاميرا المتاحة لا تلبي إعدادات التصوير. استخدم زر «التقاط بالكاميرا» أو رفع صورة.');
+      } else if (name === 'TimeoutError') {
+        setCameraError('استغرق فتح الكاميرا وقتًا طويلًا. استخدم زر «التقاط بالكاميرا» — الأكثر توافقًا مع الجوال.');
       } else {
-        setCameraError('تعذر تشغيل الكاميرا. استخدم رفع صورة من الجهاز بدلًا من ذلك.');
+        setCameraError('تعذر تشغيل كاميرا المعاينة. استخدم زر «التقاط بالكاميرا» أو رفع صورة من الجهاز.');
       }
       stopCamera();
+    } finally {
+      setCameraRequesting(false);
     }
   }
 
@@ -216,15 +254,27 @@ export function MealAnalyzer({
               <Camera className="h-12 w-12 text-ocean-300" />
               <p className="max-w-xs text-sm text-slate-500">التقط صورة لوجبتك بالكاميرا أو ارفع صورة من جهازك</p>
               <div className="flex flex-wrap justify-center gap-3">
-                <Button onClick={startCamera}>
+                <Button onClick={startCamera} loading={cameraRequesting}>
                   <Camera className="h-4 w-4" />
-                  تشغيل الكاميرا
+                  {cameraRequesting ? 'جارٍ فتح الكاميرا…' : 'تشغيل الكاميرا'}
+                </Button>
+                <Button onClick={() => captureInputRef.current?.click()} variant="gold">
+                  <Camera className="h-4 w-4" />
+                  التقاط بالكاميرا
                 </Button>
                 <label className="btn-secondary cursor-pointer">
                   <Upload className="h-4 w-4" />
                   رفع صورة
                   <input type="file" accept="image/*" className="hidden" onChange={onUpload} />
                 </label>
+                <input
+                  ref={captureInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={onUpload}
+                />
               </div>
               {cameraError && <p className="max-w-xs text-xs text-red-600">{cameraError}</p>}
             </div>

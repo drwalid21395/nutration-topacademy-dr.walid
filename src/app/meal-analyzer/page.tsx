@@ -32,7 +32,7 @@ export default async function MealAnalyzerPage() {
       )}
       <div className="mb-5 flex items-center gap-2">
         <Badge color={provider === 'mock' ? 'slate' : 'green'}>
-          مزود التحليل: {provider === 'mock' ? 'تقدير محلي (تجريبي)' : provider === 'openai' ? 'OpenAI Vision' : 'Gemini Vision'}
+          مزود التحليل: {provider === 'mock' ? 'تقدير محلي (تجريبي)' : provider === 'openai' ? 'OpenAI Vision' : provider === 'groq' ? 'Groq Vision' : 'Gemini Vision'}
         </Badge>
       </div>
       <MealAnalyzer targets={targets} />

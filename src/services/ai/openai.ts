@@ -55,14 +55,31 @@ export function createOpenAIProvider(): VisionProvider {
         choices?: { message?: { content?: string } }[];
       };
       const content = data.choices?.[0]?.message?.content ?? '{}';
-      const json = JSON.parse(content);
 
-      return normalize(json, 'openai');
+      return normalizeOpenAIResult(extractJson(content), 'openai');
     },
   };
 }
 
-function normalize(json: Record<string, unknown>, provider: string): MealAnalysisResult {
+/** استخراج JSON من نص الرد (يتحمل كود markdown أو نص حول الـ JSON) */
+export function extractJson(content: string): Record<string, unknown> {
+  let trimmed = content.trim();
+  trimmed = trimmed.replace(/<think>[\s\S]*?<\/think>/g, '');
+  const fence = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fence ? fence[1] : trimmed;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      return JSON.parse(candidate.slice(start, end + 1));
+    } catch {
+      /* سقط في الأقل الموقع — جرب parsing كامل أدناه */
+    }
+  }
+  return JSON.parse(candidate);
+}
+
+export function normalizeOpenAIResult(json: Record<string, unknown>, provider: string): MealAnalysisResult {
   const foods: AnalyzedFood[] = Array.isArray(json.foods)
     ? (json.foods as AnalyzedFood[]).map((f) => ({
         nameAr: f.nameAr ?? 'طعام',

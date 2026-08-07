@@ -7,6 +7,7 @@ import type { VisionProvider } from './types';
 import { mockVisionProvider } from './mock';
 import { createOpenAIProvider } from './openai';
 import { createGeminiProvider } from './gemini';
+import { createGroqProvider } from './groq';
 
 export type { VisionProvider, MealAnalysisResult } from './types';
 export { ANALYZE_DISCLAIMER } from './types';
@@ -20,11 +21,15 @@ export function getVisionProvider(): VisionProvider {
   if (provider === 'gemini' || process.env.GEMINI_API_KEY) {
     return createGeminiProvider();
   }
+  if (provider === 'groq' || process.env.GROQ_API_KEY) {
+    return createGroqProvider();
+  }
   return mockVisionProvider;
 }
 
 export const activeProviderName = (): string => {
   if (process.env.OPENAI_API_KEY) return 'openai';
   if (process.env.GEMINI_API_KEY) return 'gemini';
+  if (process.env.GROQ_API_KEY) return 'groq';
   return 'mock';
 };

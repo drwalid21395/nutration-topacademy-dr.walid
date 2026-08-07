@@ -8,7 +8,7 @@ import type { VisionProvider } from './types';
 import type { MealAnalysisResult, AnalyzedFood } from '@/types';
 
 export const MOCK_WARNING =
-  'وضع المحاكاة (بدون مفتاح API): لا يفحص النظام الصورة فعليًا، والنتائج أدناه تقديرات تجريبية عامة قابلة للتعديل. لتحليل دقيق حقيقي للصورة أضف مفتاح OpenAI أو Gemini في متغيرات البيئة.';
+  'وضع المحاكاة (بدون مفتاح API): لا يفحص النظام الصورة فعليًا، والنتائج أدناه تقديرات تجريبية عامة قابلة للتعديل. لتحليل دقيق حقيقي للصورة أضف مفتاح OpenAI أو Gemini أو Groq في متغيرات البيئة.';
 
 const PLACEHOLDERS: { nameAr: string; nameEn: string; cals: number; p: number; c: number; f: number; fbr: number; na: number }[] = [
   { nameAr: 'مكوّن تقديري (محاكاة)', nameEn: 'simulated component', cals: 210, p: 14, c: 22, f: 7, fbr: 2, na: 180 },

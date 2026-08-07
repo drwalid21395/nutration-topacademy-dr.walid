@@ -55,3 +55,7 @@ prisma/*.db
 # uploads
 public/uploads/*
 !public/uploads/.gitkeep
+
+.vercel
+.env*
+.neon

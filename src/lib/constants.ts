@@ -134,4 +134,4 @@ export const SUPPLEMENT_ACK_TEXT =
 
 export const SUPPLEMENT_BRANDING = 'إعداد وإشراف: د. وليد عبد الرحمن عبد الظاهر — Top Academy';
 
-export const FOOD_DB_SIZE = 'قاعدة بيانات غذائية عربية قابلة للتوسع — تستورد لاحقًا من مصادر موثوقة عبر API';
+export const FOOD_DB_SIZE = 'قاعدة بيانات غذائية عربية (140+ صنفًا) بقيم غذائية مبنية على مراجع موثوقة (USDA FoodData Central وقواعد بيانات مغذية عربية معتمدة) — تُستكمل لاحقًا عبر API';
