@@ -78,7 +78,7 @@ export default async function SwimmerProfilePage() {
           أدخل بيانات السباح الأساسية والتدريبية والغذائية — تُستخدم لاحقًا في حساب الاحتياجات وإنشاء الخطط.
         </p>
       </div>
-      <SwimmerProfileForm initial={initial} />
+      <SwimmerProfileForm initial={initial} userImage={user.image ?? null} userName={user.name ?? null} />
     </AppShell>
   );
 }

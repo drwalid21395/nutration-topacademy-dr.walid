@@ -27,6 +27,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { Logo } from '@/components/layout/logo';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { cn } from '@/lib/utils';
 import { ROLES } from '@/lib/constants';
 
@@ -81,14 +82,7 @@ export function AppShell({
             {ROLES[user.role as keyof typeof ROLES] ?? user.role}
           </span>
           <div className="flex items-center gap-2">
-            {user.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.image} alt="" className="h-9 w-9 rounded-full object-cover ring-2 ring-ocean-200" />
-            ) : (
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-ocean-500 to-ocean-700 text-sm font-black text-white">
-                {(user.name ?? '؟').charAt(0)}
-              </div>
-            )}
+            <UserAvatar name={user.name} image={user.image} size="sm" />
             <div className="hidden sm:block">
               <p className="text-sm font-bold text-slate-800">{user.name}</p>
               <p className="text-xs text-slate-400">{user.email}</p>

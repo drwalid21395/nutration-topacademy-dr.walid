@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Dumbbell, HeartPulse, Check, Calculator } from 'lucide-react';
+import { User, Dumbbell, HeartPulse, Check, Calculator, Camera, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea, Field, Toggle } from '@/components/ui/forms';
 import { Alert, Card, Badge } from '@/components/ui';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   AGE_GROUPS,
   SWIMMER_LEVELS,
@@ -31,13 +32,59 @@ function numberOrEmpty(v: string | number | null | undefined): string {
   return String(v);
 }
 
-export function SwimmerProfileForm({ initial }: { initial: SwimmerFormData | null }) {
+export function SwimmerProfileForm({
+  initial,
+  userImage,
+  userName,
+}: {
+  initial: SwimmerFormData | null;
+  userImage?: string | null;
+  userName?: string | null;
+}) {
   const router = useRouter();
   const [tab, setTab] = useState('basic');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [medicalAlert, setMedicalAlert] = useState<{ on: boolean; message: string } | null>(null);
+  const [avatar, setAvatar] = useState<string | null>(userImage ?? null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError('حجم الصورة يتجاوز 2 ميجابايت');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
+      if (!dataUrl) return;
+      setUploading(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/profile/photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error ?? 'تعذر رفع الصورة');
+          return;
+        }
+        setAvatar(data.image);
+      } catch {
+        setError('تعذر رفع الصورة');
+      } finally {
+        setUploading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
 
   const [d, setD] = useState<SwimmerFormData>(
     initial ?? {
@@ -111,6 +158,34 @@ export function SwimmerProfileForm({ initial }: { initial: SwimmerFormData | nul
       {tab === 'basic' && (
         <Card>
           <h2 className="mb-4 text-lg font-bold text-ocean-900">البيانات الأساسية</h2>
+          <div className="mb-5 flex items-center gap-4 rounded-xl bg-ocean-50/60 p-4">
+            <UserAvatar name={userName} image={avatar} size="xl" />
+            <div>
+              <p className="text-sm font-bold text-ocean-900">الصورة الشخصية</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                صورة توضيحية للسباح — تظهر في ملفه الشخصي ولوحات المتابعة. أقصى حجم 2 ميجابايت.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                >
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  {avatar ? 'تغيير الصورة' : 'رفع صورة'}
+                </Button>
+                {avatar && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setAvatar(null)}>
+                    <X className="h-4 w-4" />
+                    إزالة
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onFilePicked} />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="الاسم الكامل" required>
               <Input value={d.fullName} onChange={(e) => set('fullName', e.target.value)} placeholder="اسم السباح" />

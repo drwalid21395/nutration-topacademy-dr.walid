@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
         data: {
           name: user.name,
           email: user.email,
+          swimmerName: user.name,
           analysisId: analysis.id,
           provider: result.provider,
           confidence: result.confidence,

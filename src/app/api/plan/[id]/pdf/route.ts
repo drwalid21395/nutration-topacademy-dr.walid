@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { buildPlanPdf } from '@/services/pdf/plan-pdf';
 import { formatDate, formatNumber } from '@/lib/utils';
 import { SWIMMER_LEVELS, GOALS, PLAN_TYPES } from '@/lib/constants';
+import { saveReportToDrive } from '@/lib/google-sync';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -96,6 +97,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
 
   try {
     const pdf = await buildPlanPdf(pdfData);
+    saveReportToDrive({
+      swimmerName: profile?.fullName ?? plan.user.name ?? 'سباح',
+      kind: 'plan',
+      fileName: `plan-${plan.id}.pdf`,
+      mimeType: 'application/pdf',
+      base64: pdf.toString('base64'),
+    }).catch(() => {});
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         'Content-Type': 'application/pdf',

@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateSupplementPdfReport } from '@/services/pdf/supplement-pdf';
 import type { SupplementAssessmentOutput } from '@/services/supplements/types';
+import { saveReportToDrive } from '@/lib/google-sync';
 
 function parse<T>(raw: string | null | undefined, fallback: T): T {
   if (!raw) return fallback;
@@ -54,6 +55,14 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
     version: assessment.version,
     assessment: output,
   });
+
+  saveReportToDrive({
+    swimmerName: dbUser?.name ?? profile?.fullName ?? 'سباح',
+    kind: 'supplement',
+    fileName: `supplement-assessment-${assessment.id}.pdf`,
+    mimeType: 'application/pdf',
+    base64: buffer.toString('base64'),
+  }).catch(() => {});
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {

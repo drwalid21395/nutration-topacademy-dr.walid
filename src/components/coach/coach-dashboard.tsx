@@ -5,6 +5,7 @@ import { Users, UserPlus, Trash2, Mail, ClipboardList, Utensils, Dumbbell, Weigh
 import { Button } from '@/components/ui/button';
 import { Input, Field } from '@/components/ui/forms';
 import { Card, Badge, Alert, EmptyState } from '@/components/ui';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { formatDate } from '@/lib/utils';
 
 export function CoachDashboard({ isDietitian }: { isDietitian: boolean }) {
@@ -83,14 +84,7 @@ export function CoachDashboard({ isDietitian }: { isDietitian: boolean }) {
                 <Card key={relation.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      {athlete.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={athlete.image} alt="" className="h-11 w-11 rounded-full object-cover" />
-                      ) : (
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-ocean-500 to-ocean-700 text-sm font-black text-white">
-                          {athlete.name?.charAt(0) ?? '؟'}
-                        </div>
-                      )}
+                      <UserAvatar name={athlete.name} image={athlete.image} size="md" />
                       <div>
                         <p className="text-sm font-bold text-slate-800">{profile?.fullName ?? athlete.name}</p>
                         <p className="flex items-center gap-1 text-xs text-slate-400"><Mail className="h-3 w-3" /> {athlete.email}</p>

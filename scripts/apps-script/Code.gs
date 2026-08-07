@@ -3,16 +3,15 @@
  * Top Academy – Smart Swimmer Nutrition | Google Drive Sync
  * ============================================================
  * ربط الموقع بفولدر Google Drive + ورقة Excel في Google Sheets.
+ * النسخة المطوّرة: فولدر خاص لكل سباح يحتوي وجباته وتقاريره.
  *
- * خطوات التفعيل:
- * 1) افتح ملف الإكسيل في المتصفح: Extensions (الإضافات) → Apps Script
- * 2) احذف أي محتوى والصق هذا الكود كاملًا
- * 3) عدّل DRIVE_FOLDER_ID إلى رقم الفولدر الخاص بك (من رابط الفولدر)
- * 4) حفظ → Deploy (نشر) → New deployment (نشر جديد) → Web app
+ * خطوات التفعيل/التحديث:
+ * 1) افتح مشروع Apps Script (من ملف الإكسيل أو console.script.google.com)
+ * 2) احذف أي محتوى والصق هذا الكود كاملًا (احتفظ بنفس DRIVE_FOLDER_ID)
+ * 3) حفظ → Deploy (نشر) → Manage deployments (إدارة عمليات النشر) → ✏️ تحرير → Version: New version → Deploy
  *    - Execute as (التنفيذ باسم): Me (أنا)
  *    - Who has access (الوصول): Anyone (أي شخص)
- * 5) انسخ Web app URL (رابط تطبيق الويب) وضعه في:
- *    متغير البيئة GOOGLE_APPSCRIPT_URL في الموقع
+ * 4) لا يتغير رابط التطبيق (يظل نفسه) — الموقع يعمل تلقائيًا.
  * ============================================================
  */
 
@@ -36,6 +35,7 @@ const MEAL_COLUMNS = [
   'ملاحظات',
   'الأطعمة (JSON)',
   'رابط صورة درايف',
+  'فولدر السباح',
 ];
 
 /** أعمدة ورقة بيانات السباحين */
@@ -57,9 +57,19 @@ const SWIMMER_COLUMNS = [
   'تحذير طبي',
 ];
 
+/** أعمدة ورقة التقارير المحمّلة */
+const REPORT_COLUMNS = [
+  'Timestamp',
+  'الاسم',
+  'نوع التقرير',
+  'اسم الملف',
+  'رابط درايف',
+];
+
 const SHEET_NAMES = {
   mealAnalysis: 'تحليل_الوجبات',
   swimmerProfile: 'السباحون',
+  reports: 'التقارير',
 };
 
 function doGet() {
@@ -79,7 +89,7 @@ function doPost(e) {
     let photoIds = [];
     if (Array.isArray(payload.photos) && payload.photos.length > 0) {
       photoIds = payload.photos.map(function (p) {
-        return savePhoto_(p);
+        return savePhoto_(p, type, data);
       });
     }
 
@@ -90,20 +100,49 @@ function doPost(e) {
   }
 }
 
-/** حفظ صورة داخل فولدر درايف (مع إمكانية مجلد فرعي) */
-function savePhoto_(photo) {
-  const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  const sub =
-    photo.folder && photo.folder !== ''
-      ? getOrCreateFolder_(folder, photo.folder)
-      : folder;
+/**
+ * مسار فولدر السباح داخل الفولدر الرئيسي:
+ * سباحين/<اسم السباح>/<وجبات | تقارير>
+ */
+function swimmerFolderPath_(type, data) {
+  const base = 'سباحين';
+  const name = (data.swimmerName || data.name || 'سباح').toString().replace(/[\\/:*?"<>|]/g, '-');
+  const sub = type === 'report' || type === 'avatar' ? 'تقارير' : 'وجبات';
+  return base + '/' + name + '/' + sub;
+}
+
+/** حفظ صورة/ملف داخل فولدر (يدعم مسار مجلدات متداخلة بفاصل /) */
+function savePhoto_(photo, type, data) {
+  const root = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+  const folderPath =
+    type === 'meal-analysis' || type === 'report' || type === 'avatar'
+      ? swimmerFolderPath_(type, data)
+      : photo.folder && photo.folder !== ''
+        ? photo.folder
+        : '';
+  const folder = folderPath === '' ? root : ensureFolderPath_(root, folderPath);
+
   const mime = photo.mimeType || 'image/jpeg';
   const fileName =
     photo.fileName || 'photo-' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg';
   const bytes = Utilities.base64Decode(photo.base64);
   const blob = Utilities.newBlob(bytes, mime, fileName);
-  const file = sub.createFile(blob);
+  const file = folder.createFile(blob);
+  // مشاركة الملف بالرابط ليعرض في الموقع
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return file.getId();
+}
+
+/** إنشاء مجلدات متداخلة من مسار مثل: سباحين/أحمد/وجبات */
+function ensureFolderPath_(root, path) {
+  const parts = path.split('/').filter(function (s) {
+    return s !== '';
+  });
+  let current = root;
+  parts.forEach(function (part) {
+    current = getOrCreateFolder_(current, part);
+  });
+  return current;
 }
 
 function getOrCreateFolder_(parent, name) {
@@ -115,9 +154,19 @@ function getOrCreateFolder_(parent, name) {
 /** كتابة صف بيانات في الورقة المناسبة (مع إنشاء الورقة إذا لم توجد) */
 function appendRow_(type, data, photoIds) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const isMeal = type === 'meal-analysis';
-  const columns = isMeal ? MEAL_COLUMNS : SWIMMER_COLUMNS;
-  const sheetName = isMeal ? SHEET_NAMES.mealAnalysis : SHEET_NAMES.swimmerProfile;
+
+  let columns;
+  let sheetName;
+  if (type === 'meal-analysis') {
+    columns = MEAL_COLUMNS;
+    sheetName = SHEET_NAMES.mealAnalysis;
+  } else if (type === 'report') {
+    columns = REPORT_COLUMNS;
+    sheetName = SHEET_NAMES.reports;
+  } else {
+    columns = SWIMMER_COLUMNS;
+    sheetName = SHEET_NAMES.swimmerProfile;
+  }
 
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -134,7 +183,7 @@ function appendRow_(type, data, photoIds) {
   };
 
   let row;
-  if (isMeal) {
+  if (type === 'meal-analysis') {
     const foods = pick('foods');
     row = [
       timestamp,
@@ -151,6 +200,15 @@ function appendRow_(type, data, photoIds) {
       pick('totalSodiumMg'),
       pick('notes'),
       typeof foods === 'string' ? foods : JSON.stringify(foods),
+      photoIds.join(', '),
+      pick('swimmerName'),
+    ];
+  } else if (type === 'report') {
+    row = [
+      timestamp,
+      pick('swimmerName'),
+      pick('kind'),
+      pick('fileName'),
       photoIds.join(', '),
     ];
   } else {

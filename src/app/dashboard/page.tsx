@@ -21,7 +21,7 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/layout/app-shell';
 import { Card, Stat, ProgressRing, ProgressBar, Badge, Alert, EmptyState } from '@/components/ui';
 import { MEAL_TYPES } from '@/lib/constants';
-import { formatNumber, startOfToday, formatDate } from '@/lib/utils';
+import { formatNumber, startOfToday, formatDate, cn } from '@/lib/utils';
 
 export const metadata = { title: 'لوحة التحكم' };
 
@@ -89,6 +89,21 @@ export default async function DashboardPage() {
   const currentDay = activePlan?.meals?.filter((m) => m.dayNumber === 1) ?? [];
   const mealTypeNow = nowHour < 10 ? 'breakfast' : nowHour < 12 ? 'snack1' : nowHour < 15 ? 'lunch' : nowHour < 18 ? 'snack2' : 'dinner';
   const nextMeal = currentDay.find((m) => m.mealType === mealTypeNow) ?? currentDay[0];
+
+  // مقارنة خطة اليوم بما سُجّل فعلًا (حسب نوع الوجبة)
+  const planComparison = currentDay.map((m) => {
+    const logged = foodLogs.filter((f) => f.mealType === m.mealType);
+    const eaten = logged.reduce((a, f) => a + (f.calories ?? 0), 0);
+    return {
+      meal: m,
+      logged: logged.length > 0,
+      eatenCalories: eaten,
+      plannedCalories: m.calories ?? 0,
+    };
+  });
+  const planCaloriesTarget = currentDay.reduce((a, m) => a + (m.calories ?? 0), 0);
+  const planCaloriesEaten = planComparison.reduce((a, c) => a + (c.eatenCalories), 0);
+  const planMealsDone = planComparison.filter((c) => c.logged).length;
 
   const hasProfile = !!profile;
 
@@ -192,6 +207,40 @@ export default async function DashboardPage() {
                 </div>
               ) : (
                 <EmptyState title="لا توجد وجبات في الخطة" description="أنشئ خطة جديدة لبدء المتابعة." />
+              )}
+
+              {planComparison.length > 0 && (
+                <div className="mt-5">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-black text-ocean-900">مقارنة خطة اليوم</h3>
+                    <span className="text-xs font-bold text-slate-500">
+                      {planMealsDone}/{planComparison.length} وجبات سُجّلت · {formatNumber(planCaloriesEaten)}/{formatNumber(planCaloriesTarget)} سعرة
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {planComparison.map(({ meal, logged, eatenCalories, plannedCalories }) => (
+                      <div key={meal.id} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-4 py-2.5">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span
+                            className={cn(
+                              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-black',
+                              logged ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'
+                            )}
+                          >
+                            {logged ? '✓' : ''}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-slate-800">{meal.title}</p>
+                            <p className="text-[10px] text-slate-400">{MEAL_TYPES[meal.mealType as keyof typeof MEAL_TYPES] ?? ''} · {meal.timing}</p>
+                          </div>
+                        </div>
+                        <span className={cn('shrink-0 text-xs font-black', logged ? 'text-emerald-600' : 'text-slate-400')}>
+                          {logged ? `${formatNumber(eatenCalories)} سعرة` : `${formatNumber(plannedCalories)} سعرة`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </Card>
           ) : (

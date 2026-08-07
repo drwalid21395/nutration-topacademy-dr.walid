@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, FileText, Utensils, Dumbbell, Trophy, ShieldCheck, Ban, CheckCircle2 } from 'lucide-react';
+import { Users, FileText, Utensils, Dumbbell, Trophy, ShieldCheck, Ban, CheckCircle2, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, Badge, Alert, EmptyState } from '@/components/ui';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { formatDate } from '@/lib/utils';
 import { ROLES } from '@/lib/constants';
 
@@ -17,7 +18,9 @@ const ROLE_BADGE: Record<string, 'ocean' | 'gold' | 'green' | 'red' | 'slate'> =
 
 export function AdminDashboard() {
   const [data, setData] = useState<any>(null);
+  const [swimmers, setSwimmers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSwimmers, setLoadingSwimmers] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
   const load = async () => {
@@ -27,8 +30,16 @@ export function AdminDashboard() {
     setLoading(false);
   };
 
+  const loadSwimmers = async () => {
+    const res = await fetch('/api/admin/swimmers');
+    const d = await res.json();
+    setSwimmers(d.swimmers ?? []);
+    setLoadingSwimmers(false);
+  };
+
   useEffect(() => {
     load();
+    loadSwimmers();
   }, []);
 
   async function updateUser(userId: string, patch: { status?: string; role?: string }) {
@@ -85,10 +96,111 @@ export function AdminDashboard() {
         ))}
       </div>
 
+      <div className="mt-6">
+        <Card>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-base font-bold text-ocean-900">
+              <ClipboardCheck className="h-5 w-5 text-ocean-500" />
+              التزام السباحين اليوم
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <a
+                href="/api/admin/reports?format=pdf"
+                download
+                className="rounded-lg bg-ocean-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-ocean-700"
+              >
+                تقرير PDF
+              </a>
+              <a
+                href="/api/admin/reports?format=csv"
+                download
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+              >
+                تقرير Excel
+              </a>
+              <Badge color="ocean">{swimmers.length} سباح</Badge>
+            </div>
+          </div>
+          {loadingSwimmers ? (
+            <p className="py-8 text-center text-sm text-slate-400">جارٍ التحميل…</p>
+          ) : swimmers.length === 0 ? (
+            <EmptyState icon={<Users className="h-10 w-10" />} title="لا يوجد سباحون بعد" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-right text-xs text-slate-500">
+                    <th className="pb-2 pr-2 font-bold">السباح</th>
+                    <th className="pb-2 pr-2 font-bold">الخطة</th>
+                    <th className="pb-2 pr-2 font-bold">السعرات</th>
+                    <th className="pb-2 pr-2 font-bold">البروتين</th>
+                    <th className="pb-2 pr-2 font-bold">الكربوهيدرات</th>
+                    <th className="pb-2 pr-2 font-bold">الدهون</th>
+                    <th className="pb-2 pr-2 font-bold">الماء</th>
+                    <th className="pb-2 pr-2 font-bold">أيام التسجيل (7)</th>
+                    <th className="pb-2 font-bold">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {swimmers.map((s) => {
+                    const a = s.adherence;
+                    return (
+                      <tr key={s.id} className="border-b border-slate-100 last:border-0">
+                        <td className="py-3 pr-2">
+                          <div className="flex items-center gap-2.5">
+                            <UserAvatar name={s.fullName} image={s.image} size="sm" />
+                            <div className="min-w-0">
+                              <p className="max-w-[140px] truncate text-sm font-bold text-slate-800">{s.fullName}</p>
+                              <p className="max-w-[140px] truncate text-xs text-slate-400" dir="ltr">{s.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-2">
+                          {s.plan ? (
+                            <div>
+                              <p className="max-w-[150px] truncate text-xs font-bold text-ocean-700">{s.plan.title}</p>
+                              <p className="text-[10px] text-slate-400">{s.plan.goal ?? ''}</p>
+                            </div>
+                          ) : (
+                            <Badge color="gold">بدون خطة</Badge>
+                          )}
+                        </td>
+                        {(['calories', 'protein', 'carbs', 'fat', 'water'] as const).map((key) => {
+                          const pct = a?.[key];
+                          const label = key === 'protein' ? 'بروتين' : key === 'carbs' ? 'كارب' : key === 'fat' ? 'دهون' : key === 'water' ? 'ماء' : 'سعرات';
+                          const val = pct ?? 0;
+                          const color = pct === null ? 'bg-slate-200' : val >= 85 ? 'bg-emerald-500' : val >= 50 ? 'bg-amber-400' : 'bg-red-400';
+                          return (
+                            <td key={key} className="py-3 pr-2">
+                              <div className="min-w-[70px]">
+                                <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+                                  <span>{label}</span>
+                                  <span className="font-bold">{pct === null ? '—' : `${val}%`}</span>
+                                </div>
+                                <div className="h-1.5 w-full rounded-full bg-slate-100">
+                                  <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${Math.max(2, Math.min(100, val))}%` }} />
+                                </div>
+                              </div>
+                            </td>
+                          );
+                        })}
+                        <td className="py-3 pr-2 text-center font-bold text-slate-700">{s.activeDays7}/7</td>
+                        <td className="py-3 pr-2">
+                          <Badge color={s.status === 'active' ? 'green' : 'gold'}>{s.status === 'active' ? 'نشط' : 'معلق'}</Badge>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      </div>
+
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <h2 className="mb-4 text-base font-bold text-ocean-900">أحدث المستخدمين</h2>
-          {data.users.length === 0 ? (
+          <h2 className="mb-4 text-base font-bold text-ocean-900">أحدث المستخدمين</h2>          {data.users.length === 0 ? (
             <EmptyState title="لا يوجد مستخدمون" />
           ) : (
             <div className="space-y-2.5">
