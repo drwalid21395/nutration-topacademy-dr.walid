@@ -35,6 +35,12 @@ next-dev.log
 .env.local
 .env*.local
 
+# API keys / secrets (مفاتيح وملفات سرية)
+مفاتح api/
+مفاتيح api/
+*keys*.txt
+*.key
+
 # vercel
 .vercel
 
