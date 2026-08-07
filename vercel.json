@@ -1,0 +1,3 @@
+{
+  "buildCommand": "node scripts/use-db.js postgres && prisma generate && prisma db push --skip-generate && next build"
+}
