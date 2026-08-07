@@ -1,7 +1,8 @@
-import { Mail, MessageSquare, Clock, ShieldCheck } from 'lucide-react';
+import { Mail, MessageSquare, Clock, ShieldCheck, MessageCircle } from 'lucide-react';
 import { Navbar } from '@/components/layout/navbar';
 import { Footer } from '@/components/layout/footer';
 import { getCurrentUser } from '@/lib/auth';
+import { CONTACT } from '@/lib/constants';
 
 export const metadata = { title: 'تواصل معنا' };
 
@@ -19,7 +20,14 @@ export default async function ContactPage() {
               <p className="mt-3 text-slate-600">نسعد بأسئلتك وملاحظاتك حول المنصة أو المحتوى العلمي.</p>
             </div>
 
-            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="card text-center">
+                <a href={CONTACT.whatsappLink} target="_blank" rel="noopener noreferrer" className="block h-full">
+                  <MessageCircle className="mx-auto h-7 w-7 text-green-500" />
+                  <h3 className="mt-2 text-sm font-bold text-ocean-900">واتساب</h3>
+                  <p className="mt-1 text-xs font-bold text-green-600" dir="ltr">{CONTACT.whatsappDisplay}</p>
+                </a>
+              </div>
               <div className="card text-center">
                 <Mail className="mx-auto h-7 w-7 text-ocean-500" />
                 <h3 className="mt-2 text-sm font-bold text-ocean-900">البريد الإلكتروني</h3>

@@ -2,7 +2,7 @@
  * توليد PDF عربي لتقرير تقييم المكملات الذكي.
  * تقرير استرشادي غير علاجي — لا يصف ولا يشخص.
  */
-import { getPdfPrinter, applyRtlNode } from './plan-pdf';
+import { getPdfPrinter, applyRtlNode, getLogoDataUri } from './plan-pdf';
 import type PdfPrinter from 'pdfmake';
 import type { SupplementAssessmentOutput } from '@/services/supplements/types';
 import { SUPPLEMENT_DISCLAIMER } from '@/lib/constants';
@@ -107,6 +107,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
             stack: [
               { text: `الإصدار: ${data.version}`, fontSize: 8, color: color.slate },
               { text: `تاريخ الإصدار: ${data.issueDate}`, fontSize: 8, color: color.slate },
+              { text: 'واتساب: 01500026288', fontSize: 8, color: color.slate, margin: [0, 4, 0, 0] },
             ],
           },
           {
@@ -116,7 +117,9 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
               { text: 'إعداد وإشراف: د. وليد عبد الرحمن عبد الظاهر', fontSize: 8.5, color: color.gold, margin: [0, 4, 0, 0] },
             ],
           },
+          ...(getLogoDataUri() ? [{ image: getLogoDataUri(), width: 48, alignment: 'center' }] : []),
         ],
+        columnGap: 12,
       },
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1.5, lineColor: color.gold }], margin: [0, 8, 0, 16] } as object,
 

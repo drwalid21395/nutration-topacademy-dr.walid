@@ -4,9 +4,24 @@
  * لذا نستخدم واجهة مناسبة للنسخة 0.2.
  */
 import path from 'path';
+import fs from 'fs';
 import PdfPrinter from 'pdfmake';
 
 let printerInstance: PdfPrinter | null = null;
+
+let logoDataUri: string | null | undefined;
+
+/** لوجو الأكاديمية كـ data URI لدمجه في رأس ملفات PDF (مع التخزين المؤقت). */
+export function getLogoDataUri(): string | null {
+  if (logoDataUri !== undefined) return logoDataUri;
+  try {
+    const p = path.join(process.cwd(), 'public', 'images', 'academy-logo.png');
+    logoDataUri = `data:image/png;base64,${fs.readFileSync(p).toString('base64')}`;
+  } catch {
+    logoDataUri = null;
+  }
+  return logoDataUri;
+}
 
 export function getPdfPrinter(): PdfPrinter {
   if (!printerInstance) {
@@ -158,6 +173,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
             stack: [
               { text: `إصدار الخطة: ${data.version}`, fontSize: 8, color: color.slate },
               { text: `تاريخ الإصدار: ${data.issueDate}`, fontSize: 8, color: color.slate },
+              { text: 'واتساب: 01500026288', fontSize: 8, color: color.slate, margin: [0, 4, 0, 0] },
             ],
           },
           {
@@ -167,7 +183,9 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
               { text: 'إعداد وإشراف: د. وليد عبد الرحمن عبد الظاهر', fontSize: 8.5, color: color.gold, margin: [0, 4, 0, 0] },
             ],
           },
+          ...(getLogoDataUri() ? [{ image: getLogoDataUri(), width: 48, alignment: 'center' }] : []),
         ],
+        columnGap: 12,
       },
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1.5, lineColor: color.gold }], margin: [0, 8, 0, 16] } as object,
 

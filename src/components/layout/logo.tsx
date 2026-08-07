@@ -1,11 +1,9 @@
 import Link from 'next/link';
-import { Waves } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BRAND } from '@/lib/constants';
 
 /**
- * الشعار النصي لـ TOP ACADEMY.
- * قابل للاستبدال بشعار صورة عبر خاصية logoImageUrl من لوحة الإدارة.
+ * شعار الأكاديمية — صورة اللوجو أعلى الموقع وفي القوائم.
  */
 export function Logo({
   variant = 'dark',
@@ -19,11 +17,17 @@ export function Logo({
     <Link href="/" className={cn('group flex items-center gap-2.5', className)} aria-label="Top Academy">
       <div
         className={cn(
-          'flex h-10 w-10 items-center justify-center rounded-xl shadow-md transition-transform group-hover:scale-105',
-          dark ? 'bg-gradient-to-br from-ocean-500 to-ocean-800' : 'bg-gradient-to-br from-ocean-300 to-ocean-600'
+          'flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl shadow-md transition-transform group-hover:scale-105',
+          dark ? 'bg-white ring-1 ring-ocean-100' : 'bg-white/10 ring-1 ring-white/20'
         )}
       >
-        <Waves className="h-6 w-6 text-white" />
+        <img
+          src="/images/academy-logo.png"
+          alt="Top Academy"
+          width={40}
+          height={40}
+          className="h-full w-full object-cover"
+        />
       </div>
       <div className="leading-tight">
         <span

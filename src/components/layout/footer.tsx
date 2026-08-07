@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { MessageCircle } from 'lucide-react';
 import { Logo } from '@/components/layout/logo';
-import { BRAND, MEDICAL_DISCLAIMER } from '@/lib/constants';
+import { BRAND, CONTACT, MEDICAL_DISCLAIMER } from '@/lib/constants';
 
 const FOOTER_LINKS = {
   'روابط سريعة': [
@@ -26,6 +27,15 @@ export function Footer() {
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-slate-400">
               {BRAND.productNameAr} — منصة ذكية لإدارة التغذية الرياضية للسباحين: حساب الاحتياجات، خطط غذائية مخصصة، تحليل الوجبات بالكاميرا، ومتابعة يومية شاملة.
             </p>
+            <a
+              href={CONTACT.whatsappLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-2 rounded-full bg-green-500/15 px-4 py-2 text-sm font-bold text-green-400 transition-colors hover:bg-green-500/25"
+            >
+              <MessageCircle className="h-4 w-4" />
+              واتساب: {CONTACT.whatsappDisplay}
+            </a>
           </div>
           {Object.entries(FOOTER_LINKS).map(([title, links]) => (
             <div key={title}>

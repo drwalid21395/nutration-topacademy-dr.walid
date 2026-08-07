@@ -12,6 +12,12 @@ export const BRAND = {
   year: new Date().getFullYear(),
 } as const;
 
+export const CONTACT = {
+  whatsappDisplay: '01500026288',
+  whatsappIntl: '201500026288',
+  whatsappLink: 'https://wa.me/201500026288',
+} as const;
+
 export const ROLES = {
   athlete: 'سباح',
   guardian: 'ولي أمر',
