@@ -15,6 +15,7 @@ const TYPE_LABELS: Record<string, string> = {
   competition: 'بطولة',
   review: 'مراجعة خطة',
   smart: 'تنبيه ذكي',
+  message: 'رسالة',
   system: 'النظام',
 };
 

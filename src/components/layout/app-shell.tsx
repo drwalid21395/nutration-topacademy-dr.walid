@@ -18,6 +18,7 @@ import {
   Pill,
   FileText,
   Bell,
+  MessageSquare,
   Settings,
   Users,
   ShieldCheck,
@@ -45,6 +46,7 @@ const NAV = [
   { href: '/supplements', label: 'دليل المكملات', icon: Pill },
   { href: '/reports', label: 'التقارير', icon: FileText },
   { href: '/notifications', label: 'الإشعارات', icon: Bell },
+  { href: '/messages', label: 'الرسائل', icon: MessageSquare },
   { href: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 

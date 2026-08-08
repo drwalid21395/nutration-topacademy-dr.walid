@@ -53,6 +53,7 @@ model User {
   auditLogs      AuditLog[]
   receivedMessages Message[] @relation("ToUser")
   sentMessages   Message[]   @relation("FromUser")
+  pushSubscriptions PushSubscription[]
   coachingRelations CoachRelation[] @relation("CoachUser")
   athleteRelations  CoachRelation[] @relation("AthleteUser")
   supplementsReads SupplementAck[]
@@ -697,6 +698,21 @@ model CoachRelation {
   createdAt DateTime @default(now())
 
   @@unique([coachId, athleteId])
+}
+
+// ---------------- إشعارات الدفع (PWA) ----------------
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Message {
