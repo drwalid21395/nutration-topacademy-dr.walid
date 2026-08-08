@@ -35,7 +35,7 @@ export const resetSchema = z.object({
 });
 
 export const profileSchema = z.object({
-  fullName: z.string().trim().min(2).max(120),
+  fullName: z.string().trim().min(2, 'اسم السباح قصير جدًا — أدخل حرفين على الأقل').max(120),
   gender: z.enum(['male', 'female']),
   birthDate: z.string().optional().or(z.literal('')),
   heightCm: z.coerce.number().min(80, 'طول غير منطقي').max(250, 'طول غير منطقي').optional(),

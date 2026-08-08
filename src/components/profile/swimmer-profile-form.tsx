@@ -51,6 +51,37 @@ export function SwimmerProfileForm({
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // تصغير الصورة من المتصفح (أقصى 512px) مع ضغط JPEG لضمان وضوح كامل
+  // وحجم صغير — تُخزَّن النتيجة كـ data URI تعرض دائمًا مهما فشل التخزين المحلي أو درايف.
+  function fileToResizedDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const MAX = 512;
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('canvas');
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('load'));
+      };
+      img.src = url;
+    });
+  }
+
   async function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -59,31 +90,26 @@ export function SwimmerProfileForm({
       setError('حجم الصورة يتجاوز 2 ميجابايت');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
-      if (!dataUrl) return;
-      setUploading(true);
-      setError(null);
-      try {
-        const res = await fetch('/api/profile/photo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: dataUrl }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error ?? 'تعذر رفع الصورة');
-          return;
-        }
-        setAvatar(data.image);
-      } catch {
-        setError('تعذر رفع الصورة');
-      } finally {
-        setUploading(false);
+    setUploading(true);
+    setError(null);
+    try {
+      const dataUrl = await fileToResizedDataUrl(file);
+      const res = await fetch('/api/profile/photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? 'تعذر رفع الصورة');
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+      setAvatar(data.image);
+    } catch {
+      setError('تعذر رفع الصورة');
+    } finally {
+      setUploading(false);
+    }
   }
 
   const [d, setD] = useState<SwimmerFormData>(
@@ -393,11 +419,11 @@ export function SwimmerProfileForm({
           {medicalAlert?.on && <Badge color="red">يتطلب مراجعة طبية — خطة إرشادية فقط</Badge>}
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={saveAndFinish} loading={saving}>
+          <Button variant="secondary" onClick={saveAndFinish} loading={saving} disabled={!d.fullName?.trim()}>
             <Check className="h-4 w-4" />
             حفظ البيانات
           </Button>
-          <Button onClick={saveAndFinish} loading={saving} disabled={!d.fullName}>
+          <Button onClick={saveAndFinish} loading={saving} disabled={!d.fullName?.trim()}>
             <Calculator className="h-4 w-4" />
             حفظ ثم احسب احتياجاتي
           </Button>

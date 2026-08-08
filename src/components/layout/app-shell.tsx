@@ -82,7 +82,7 @@ export function AppShell({
             {ROLES[user.role as keyof typeof ROLES] ?? user.role}
           </span>
           <div className="flex items-center gap-2">
-            <UserAvatar name={user.name} image={user.image} size="sm" />
+            <UserAvatar name={user.name} image={user.image} size="md" />
             <div className="hidden sm:block">
               <p className="text-sm font-bold text-slate-800">{user.name}</p>
               <p className="text-xs text-slate-400">{user.email}</p>

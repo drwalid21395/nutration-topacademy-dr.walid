@@ -4,7 +4,7 @@ import path from 'path';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { rateLimit } from '@/lib/security';
-import { syncToGoogleDrive, driveFileUrl } from '@/lib/google-sync';
+import { syncToGoogleDrive } from '@/lib/google-sync';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2MB
 
@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
   const filename = `${user.id}.${ext}`;
 
   let imageUrl = '';
+  let localSaved = false;
 
   try {
     const dir = path.join(process.cwd(), 'public', 'uploads', 'avatars');
@@ -55,28 +56,26 @@ export async function POST(req: NextRequest) {
     await writeFile(path.join(dir, filename), bytes);
     const storageBase = process.env.STORAGE_BASE_URL ?? '';
     imageUrl = `${storageBase}/uploads/avatars/${filename}`;
+    localSaved = true;
   } catch {
-    // على Vercel (نظام ملفات للقراءة فقط) نعتمد على درايف أو التخزين المضمّن
+    // على Vercel (نظام ملفات للقراءة فقط) نعتمد على التخزين المضمّن
   }
 
-  if (!imageUrl) {
-    try {
-      const drive = await syncToGoogleDrive({
-        type: 'avatar',
-        data: { swimmerName: user.name },
-        photos: [{ fileName: filename, mimeType: mime, base64: raw, folder: 'avatars' }],
-      });
-      if (drive.photoIds?.[0]) {
-        imageUrl = driveFileUrl(drive.photoIds[0]);
-      }
-    } catch {
-      // درايف اختياري
-    }
+  // نسخة احتياطية في Google Drive (فولدر السباح) — للتوثيق فقط ولا تُعتمد كرابط عرض
+  // لأن ملفات درايف قد لا تكون مشتركة برابط عام فتعطي صورة معطوبة.
+  try {
+    await syncToGoogleDrive({
+      type: 'avatar',
+      data: { swimmerName: user.name },
+      photos: [{ fileName: filename, mimeType: mime, base64: raw, folder: 'avatars' }],
+    });
+  } catch {
+    // درايف اختياري
   }
 
-  // الحل الأخير المضمون: تخزين الصورة مضمّنة (data URI) في حساب المستخدم
-  // حتى تظهر الصورة دائمًا حتى لو فشل التخزين المحلي ودرايف.
-  if (!imageUrl) {
+  // الصورة المضمونة: التخزين المضمّن (data URI) يعرض دائمًا وبوضوح تام
+  // مهما فشل التخزين المحلي أو درايف — خاصةً على الإنتاج.
+  if (!localSaved) {
     imageUrl = `data:${mime};base64,${raw}`;
   }
 
