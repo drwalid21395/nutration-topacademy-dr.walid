@@ -39,7 +39,9 @@ export const authOptions: NextAuthOptions = {
           id: user.id,
           name: user.name,
           email: user.email,
-          image: user.image,
+          // الصورة قد تكون كبيرة (data URI) — لا تُخزَّن في الجلسة/JWT أبدًا
+          // حتى لا يتجاوز حجم الكوكي حد الهيدر (خطأ 494 REQUEST_HEADER_TOO_LARGE).
+          image: null,
           role: user.role,
         };
       },
@@ -51,15 +53,15 @@ export const authOptions: NextAuthOptions = {
         token.id = (user as { id: string }).id;
         token.role = (user as { role?: string }).role ?? 'athlete';
       }
-      // بعد تغيير الصورة أو الاسم: تحديث بيانات الجلسة من قاعدة البيانات
+      // تحديث الاسم فقط من قاعدة البيانات — الصورة تُجلب دائمًا عبر getCurrentUser
+      // ولا تدخل الجلسة/JWT أبدًا (حفاظًا على صغر حجم الكوكي).
       if (trigger === 'update' && token.id) {
         const fresh = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { name: true, image: true },
+          select: { name: true },
         });
         if (fresh) {
           token.name = fresh.name;
-          token.image = fresh.image;
         }
       }
       return token;
@@ -93,11 +95,27 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   const session = await getServerSession(authOptions);
   if (!session?.user) return null;
   const u = session.user as SessionUser;
+
+  // الصورة لا تُخزَّن في الجلسة (قد تكون data URI كبيرة)، لذا نجلبها من قاعدة
+  // البيانات عند الحاجة فقط — ليبقى حجم الكوكي صغيرًا ولا يحدث خطأ 494.
+  let image = u.image ?? null;
+  if (!image && u.id) {
+    try {
+      const db = await prisma.user.findUnique({
+        where: { id: u.id },
+        select: { image: true },
+      });
+      image = db?.image ?? null;
+    } catch {
+      image = null;
+    }
+  }
+
   return {
     id: u.id,
     name: u.name,
     email: u.email,
-    image: u.image,
+    image,
     role: u.role ?? 'athlete',
   };
 }
