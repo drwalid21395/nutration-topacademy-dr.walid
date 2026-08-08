@@ -167,7 +167,12 @@ export default async function PlanDetailPage({
                           </li>
                         ))}
                     </ul>
-                    {m.note && <p className="mt-2 rounded-lg bg-ocean-50 px-2.5 py-1.5 text-xs text-ocean-700">{m.note}</p>}
+                    {m.note && (
+                      <div className="mt-2 rounded-lg bg-ocean-50 px-2.5 py-2 text-xs text-ocean-800">
+                        <span className="font-bold">كيفية التحضير والتجهيز:</span>
+                        <p className="mt-1 whitespace-pre-line leading-relaxed">{m.note}</p>
+                      </div>
+                    )}
                     <MealSwap mealId={m.id} planId={plan.id} alternatives={storedAlternatives(m.id)} />
                   </div>
                 ))}

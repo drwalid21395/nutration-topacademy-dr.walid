@@ -51,6 +51,7 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
       title: m.title,
       timing: m.timing ?? '',
       calories: m.calories,
+      note: m.note ?? undefined,
       items: m.items
         .filter((it) => !it.isAlternative)
         .map((it) => {

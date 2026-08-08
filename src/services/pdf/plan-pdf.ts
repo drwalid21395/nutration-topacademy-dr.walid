@@ -51,7 +51,7 @@ export interface PdfPlanData {
   carbsG?: number | null;
   fatG?: number | null;
   waterMl?: number | null;
-  meals: { day: number; type: string; title: string; timing?: string; calories?: number | null; items: { name: string; qty: string; cals: number }[] }[];
+  meals: { day: number; type: string; title: string; timing?: string; calories?: number | null; note?: string; items: { name: string; qty: string; cals: number }[] }[];
   shoppingList: string[];
   alternativesNote?: string;
   competitionNotes?: string[];
@@ -140,7 +140,10 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
   const dayTables = Array.from(days.entries()).map(([day, meals]) => {
     const rows = meals.map((m) => {
       const itemText = m.items.map((it) => `${it.name} (${it.qty})`).join('\n');
-      return [cell(m.timing ?? ''), cell(m.calories ?? '—'), cell(itemText), cell(m.title, { bold: true, color: color.ocean }), cell(`اليوم ${day}`, { bold: true })];
+      const prepText = m.note
+        ? `طريقة التحضير والتجهيز:\n${m.note}`
+        : '';
+      return [cell(m.timing ?? ''), cell(m.calories ?? '—'), cell([itemText, prepText].filter(Boolean).join('\n\n')), cell(m.title, { bold: true, color: color.ocean }), cell(`اليوم ${day}`, { bold: true })];
     });
     return {
       layout: 'lightHorizontalLines',
