@@ -46,10 +46,21 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = (user as { id: string }).id;
         token.role = (user as { role?: string }).role ?? 'athlete';
+      }
+      // بعد تغيير الصورة أو الاسم: تحديث بيانات الجلسة من قاعدة البيانات
+      if (trigger === 'update' && token.id) {
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { name: true, image: true },
+        });
+        if (fresh) {
+          token.name = fresh.name;
+          token.image = fresh.image;
+        }
       }
       return token;
     },

@@ -22,6 +22,7 @@ import {
   Settings,
   Users,
   ShieldCheck,
+  UserCheck,
   LogOut,
   Menu,
   X,
@@ -35,6 +36,7 @@ import { ROLES } from '@/lib/constants';
 const NAV = [
   { href: '/dashboard', label: 'لوحة التحكم', icon: LayoutDashboard },
   { href: '/swimmer-profile', label: 'ملف السباح', icon: ClipboardList },
+  { href: '/my-profile', label: 'ملخص بياناتي', icon: UserCheck },
   { href: '/calculator', label: 'حاسبة الاحتياجات', icon: Calculator },
   { href: '/plan/create', label: 'إنشاء خطة غذائية', icon: Salad },
   { href: '/meal-analyzer', label: 'محلل الوجبات', icon: Camera },

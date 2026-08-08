@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { User, Dumbbell, HeartPulse, Check, Calculator, Camera, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea, Field, Toggle } from '@/components/ui/forms';
@@ -42,6 +43,7 @@ export function SwimmerProfileForm({
   userName?: string | null;
 }) {
   const router = useRouter();
+  const { update: refreshSession } = useSession();
   const [tab, setTab] = useState('basic');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +107,14 @@ export function SwimmerProfileForm({
         return;
       }
       setAvatar(data.image);
+      // تحديث الجلسة (JWT) ثم إعادة رسم الصفحة حتى تظهر الصورة الجديدة
+      // في هيدر التطبيق وباقي الصفحات دون الحاجة لتسجيل الخروج والدخول.
+      try {
+        await refreshSession();
+      } catch {
+        // التحديث اختياري
+      }
+      router.refresh();
     } catch {
       setError('تعذر رفع الصورة');
     } finally {

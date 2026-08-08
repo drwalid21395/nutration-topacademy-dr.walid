@@ -151,7 +151,15 @@ export function AdminDashboard() {
                             <UserAvatar name={s.fullName} image={s.image} size="sm" />
                             <div className="min-w-0">
                               <p className="max-w-[140px] truncate text-sm font-bold text-slate-800">{s.fullName}</p>
-                              <p className="max-w-[140px] truncate text-xs text-slate-400" dir="ltr">{s.email}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="max-w-[110px] truncate text-xs text-slate-400" dir="ltr">{s.email}</p>
+                                <a
+                                  href={`/my-profile?userId=${s.id}`}
+                                  className="shrink-0 rounded-md bg-ocean-50 px-1.5 py-0.5 text-[10px] font-bold text-ocean-700 hover:bg-ocean-100"
+                                >
+                                  ملخص
+                                </a>
+                              </div>
                             </div>
                           </div>
                         </td>
