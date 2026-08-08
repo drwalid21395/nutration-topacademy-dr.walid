@@ -8,6 +8,9 @@ import { saveReportToDrive } from '@/lib/google-sync';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+// PDF للخطط الطويلة (30 يومًا) قد يستغرق عدة ثوانٍ — ارفع المهلة.
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest, ctx: RouteContext) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'يجب تسجيل الدخول' }, { status: 401 });

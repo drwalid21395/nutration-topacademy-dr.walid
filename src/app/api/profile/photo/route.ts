@@ -56,24 +56,28 @@ export async function POST(req: NextRequest) {
     const storageBase = process.env.STORAGE_BASE_URL ?? '';
     imageUrl = `${storageBase}/uploads/avatars/${filename}`;
   } catch {
-    // على Vercel (نظام ملفات للقراءة فقط) نعتمد على نسخة درايف
-  }
-
-  try {
-    const drive = await syncToGoogleDrive({
-      type: 'avatar',
-      data: { swimmerName: user.name },
-      photos: [{ fileName: filename, mimeType: mime, base64: raw, folder: 'avatars' }],
-    });
-    if (!imageUrl && drive.photoIds?.[0]) {
-      imageUrl = driveFileUrl(drive.photoIds[0]);
-    }
-  } catch {
-    // درايف اختياري
+    // على Vercel (نظام ملفات للقراءة فقط) نعتمد على درايف أو التخزين المضمّن
   }
 
   if (!imageUrl) {
-    return NextResponse.json({ error: 'تعذر حفظ الصورة' }, { status: 500 });
+    try {
+      const drive = await syncToGoogleDrive({
+        type: 'avatar',
+        data: { swimmerName: user.name },
+        photos: [{ fileName: filename, mimeType: mime, base64: raw, folder: 'avatars' }],
+      });
+      if (drive.photoIds?.[0]) {
+        imageUrl = driveFileUrl(drive.photoIds[0]);
+      }
+    } catch {
+      // درايف اختياري
+    }
+  }
+
+  // الحل الأخير المضمون: تخزين الصورة مضمّنة (data URI) في حساب المستخدم
+  // حتى تظهر الصورة دائمًا حتى لو فشل التخزين المحلي ودرايف.
+  if (!imageUrl) {
+    imageUrl = `data:${mime};base64,${raw}`;
   }
 
   await prisma.user.update({ where: { id: user.id }, data: { image: imageUrl } });

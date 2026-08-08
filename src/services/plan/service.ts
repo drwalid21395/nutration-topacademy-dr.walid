@@ -145,6 +145,96 @@ async function persistPlan(
     },
   });
 
+  // على PostgreSQL (الإنتاج): كتابة مجمّعة بمعرّفات مولّدة — أسرع بكثير
+  // من 100+ استعلام متسلسل، ويمنع انتهاء مهلة الدالة في الخطط الطويلة.
+  if (!(process.env.DATABASE_URL ?? '').startsWith('file:')) {
+    const mealRows: {
+      id: string;
+      planId: string;
+      dayNumber: number;
+      mealType: string;
+      title: string;
+      timing: string | null;
+      calories: number | null;
+      proteinG: number | null;
+      carbsG: number | null;
+      fatG: number | null;
+      note: string | null;
+    }[] = [];
+    const itemRows: {
+      id: string;
+      mealId: string;
+      foodNameAr: string;
+      quantity: string | null;
+      grams: number | null;
+      calories: number | null;
+      proteinG: number | null;
+      carbsG: number | null;
+      fatG: number | null;
+      isAlternative: boolean;
+      alternativeType: string | null;
+    }[] = [];
+
+    for (let d = 0; d < generated.days.length; d++) {
+      for (const m of generated.days[d]) {
+        const mealId = crypto.randomUUID();
+        mealRows.push({
+          id: mealId,
+          planId: plan.id,
+          dayNumber: d + 1,
+          mealType: m.mealType,
+          title: m.title,
+          timing: m.timing,
+          calories: m.calories,
+          proteinG: m.proteinG,
+          carbsG: m.carbsG,
+          fatG: m.fatG,
+          note: m.note ?? null,
+        });
+        for (const it of m.items) {
+          itemRows.push({
+            id: crypto.randomUUID(),
+            mealId,
+            foodNameAr: it.foodNameAr,
+            quantity: it.quantity,
+            grams: it.grams,
+            calories: it.calories,
+            proteinG: it.proteinG,
+            carbsG: it.carbsG,
+            fatG: it.fatG,
+            isAlternative: false,
+            alternativeType: null,
+          });
+        }
+        for (const [altType, altItems] of Object.entries(m.alternatives)) {
+          for (const it of altItems) {
+            itemRows.push({
+              id: crypto.randomUUID(),
+              mealId,
+              foodNameAr: it.foodNameAr,
+              quantity: it.quantity,
+              grams: it.grams,
+              calories: it.calories,
+              proteinG: it.proteinG,
+              carbsG: it.carbsG,
+              fatG: it.fatG,
+              isAlternative: true,
+              alternativeType: altType,
+            });
+          }
+        }
+      }
+    }
+
+    await prisma.meal.createMany({ data: mealRows });
+    const CHUNK = 500;
+    for (let i = 0; i < itemRows.length; i += CHUNK) {
+      await prisma.mealItem.createMany({ data: itemRows.slice(i, i + CHUNK) });
+    }
+    return plan;
+  }
+
+  // SQLite (البيئة المحلية): الكتابة المتسلسلة المعتادة مع العناصر المتداخلة.
   for (let d = 0; d < generated.days.length; d++) {
     const dayMeals = generated.days[d];
     for (const m of dayMeals) {

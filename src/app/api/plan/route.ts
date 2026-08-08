@@ -15,6 +15,9 @@ const PLAN_DURATIONS: Record<string, number> = {
   postCompetition: 3,
 };
 
+// الخطط الطويلة (30 يومًا) تحتاج مهلة أطول عند الحفظ المجمّع على قاعدة الإنتاج.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'يجب تسجيل الدخول' }, { status: 401 });
