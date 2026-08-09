@@ -131,106 +131,179 @@ export function AdminDashboard() {
           ) : swimmers.length === 0 ? (
             <EmptyState icon={<Users className="h-10 w-10" />} title="لا يوجد سباحون بعد" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-right text-xs text-slate-500">
-                    <th className="pb-2 pr-2 font-bold">السباح</th>
-                    <th className="pb-2 pr-2 font-bold">الخطة</th>
-                    <th className="pb-2 pr-2 font-bold">السعرات اليوم</th>
-                    <th className="pb-2 pr-2 font-bold">وجبات/تمارين</th>
-                    <th className="pb-2 pr-2 font-bold">البروتين</th>
-                    <th className="pb-2 pr-2 font-bold">الكربوهيدرات</th>
-                    <th className="pb-2 pr-2 font-bold">الدهون</th>
-                    <th className="pb-2 pr-2 font-bold">الماء</th>
-                    <th className="pb-2 pr-2 font-bold">أيام التسجيل (7)</th>
-                    <th className="pb-2 font-bold">الحالة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {swimmers.map((s) => {
-                    const a = s.adherence;
+            <>
+              {/* بطاقات للجوال */}
+              <div className="space-y-3 lg:hidden">
+                {swimmers.map((s) => {
+                  const a = s.adherence;
+                  const bar = (key: string) => {
+                    const pct = a?.[key];
+                    const val = pct ?? 0;
+                    const color = pct === null ? 'bg-slate-200' : val >= 85 ? 'bg-emerald-500' : val >= 50 ? 'bg-amber-400' : 'bg-red-400';
                     return (
-                      <tr key={s.id} className="border-b border-slate-100 last:border-0">
-                        <td className="py-3 pr-2">
-                          <Link href={`/admin/swimmer/${s.id}`} className="group flex items-center gap-2.5">
-                            <UserAvatar name={s.fullName} image={s.image} size="sm" />
-                            <div className="min-w-0">
-                              <p className="flex max-w-[140px] items-center gap-1 truncate text-sm font-bold text-slate-800 group-hover:text-ocean-700">
-                                {s.fullName}
-                                <Eye className="h-3 w-3 shrink-0 text-ocean-400 opacity-0 transition-opacity group-hover:opacity-100" />
-                              </p>
-                              <div className="flex items-center gap-1.5">
-                                <p className="max-w-[110px] truncate text-xs text-slate-400" dir="ltr">{s.email}</p>
-                                <a
-                                  href={`/my-profile?userId=${s.id}`}
-                                  className="shrink-0 rounded-md bg-ocean-50 px-1.5 py-0.5 text-[10px] font-bold text-ocean-700 hover:bg-ocean-100"
-                                >
-                                  ملخص
-                                </a>
-                              </div>
-                            </div>
-                          </Link>
-                        </td>
-                        <td className="py-3 pr-2">
-                          {s.plan ? (
-                            <div>
-                              <p className="max-w-[150px] truncate text-xs font-bold text-ocean-700">{s.plan.title}</p>
-                              <p className="text-[10px] text-slate-400">{s.plan.goal ?? ''}</p>
-                            </div>
-                          ) : (
-                            <Badge color="gold">بدون خطة</Badge>
-                          )}
-                        </td>
-                        <td className="py-3 pr-2">
-                          <div className="text-xs font-black text-ocean-900">{formatNumber(s.today?.calories ?? 0)} سعرة</div>
-                          <div className="text-[10px] text-slate-400">
-                            {a?.calories === null || a?.calories === undefined
-                              ? 'لا توجد خطة'
-                              : `${a.calories}% من الخطة`}
+                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${Math.max(2, Math.min(100, val))}%` }} />
+                      </div>
+                    );
+                  };
+                  return (
+                    <Link
+                      key={s.id}
+                      href={`/admin/swimmer/${s.id}`}
+                      className="block rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-ocean-300 hover:bg-ocean-50/40"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <UserAvatar name={s.fullName} image={s.image} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-slate-800">{s.fullName}</p>
+                            <p className="truncate text-xs text-slate-400" dir="ltr">{s.email}</p>
                           </div>
-                        </td>
-                        <td className="py-3 pr-2">
-                          <div className="flex flex-col gap-1">
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
-                              <Utensils className="h-3.5 w-3.5 text-gold-500" />
-                              {s.today?.mealsCount ?? 0} وجبة
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
-                              <Dumbbell className="h-3.5 w-3.5 text-emerald-500" />
-                              {s.today?.trainingsCount ?? 0} تمرين
-                            </span>
-                          </div>
-                        </td>
-                        {(['protein', 'carbs', 'fat', 'water'] as const).map((key) => {
+                        </div>
+                        <Badge color={s.status === 'active' ? 'green' : 'gold'}>{s.status === 'active' ? 'نشط' : 'معلق'}</Badge>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                        <span className="inline-flex items-center gap-1 font-bold text-slate-700">
+                          <Utensils className="h-3.5 w-3.5 text-gold-500" />
+                          {s.today?.mealsCount ?? 0} وجبة
+                        </span>
+                        <span className="inline-flex items-center gap-1 font-bold text-slate-700">
+                          <Dumbbell className="h-3.5 w-3.5 text-emerald-500" />
+                          {s.today?.trainingsCount ?? 0} تمرين
+                        </span>
+                        <span className="font-black text-ocean-900">{formatNumber(s.today?.calories ?? 0)} سعرة</span>
+                        <span className="text-slate-500">تسجيل {s.activeDays7}/7</span>
+                      </div>
+
+                      {s.plan ? (
+                        <p className="mt-2 truncate text-xs font-bold text-ocean-700">{s.plan.title}</p>
+                      ) : (
+                        <Badge color="gold" className="mt-2">بدون خطة</Badge>
+                      )}
+
+                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                        {(['calories', 'protein', 'carbs', 'fat', 'water'] as const).map((key) => {
+                          const label = key === 'protein' ? 'بروتين' : key === 'carbs' ? 'كربوهيدرات' : key === 'fat' ? 'دهون' : key === 'water' ? 'ماء' : 'سعرات';
                           const pct = a?.[key];
-                          const label = key === 'protein' ? 'بروتين' : key === 'carbs' ? 'كارب' : key === 'fat' ? 'دهون' : 'ماء';
-                          const val = pct ?? 0;
-                          const color = pct === null ? 'bg-slate-200' : val >= 85 ? 'bg-emerald-500' : val >= 50 ? 'bg-amber-400' : 'bg-red-400';
                           return (
-                            <td key={key} className="py-3 pr-2">
-                              <div className="min-w-[70px]">
-                                <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
-                                  <span>{label}</span>
-                                  <span className="font-bold">{pct === null ? '—' : `${val}%`}</span>
-                                </div>
-                                <div className="h-1.5 w-full rounded-full bg-slate-100">
-                                  <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${Math.max(2, Math.min(100, val))}%` }} />
-                                </div>
+                            <div key={key}>
+                              <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+                                <span>{label}</span>
+                                <span className="font-bold">{pct === null ? '—' : `${pct}%`}</span>
                               </div>
-                            </td>
+                              {bar(key)}
+                            </div>
                           );
                         })}
-                        <td className="py-3 pr-2 text-center font-bold text-slate-700">{s.activeDays7}/7</td>
-                        <td className="py-3 pr-2">
-                          <Badge color={s.status === 'active' ? 'green' : 'gold'}>{s.status === 'active' ? 'نشط' : 'معلق'}</Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/* جدول للحاسوب */}
+              <div className="hidden overflow-x-auto lg:block">
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-right text-xs text-slate-500">
+                      <th className="pb-2 pr-2 font-bold">السباح</th>
+                      <th className="pb-2 pr-2 font-bold">الخطة</th>
+                      <th className="pb-2 pr-2 font-bold">السعرات اليوم</th>
+                      <th className="pb-2 pr-2 font-bold">وجبات/تمارين</th>
+                      <th className="pb-2 pr-2 font-bold">البروتين</th>
+                      <th className="pb-2 pr-2 font-bold">الكربوهيدرات</th>
+                      <th className="pb-2 pr-2 font-bold">الدهون</th>
+                      <th className="pb-2 pr-2 font-bold">الماء</th>
+                      <th className="pb-2 pr-2 font-bold">أيام التسجيل (7)</th>
+                      <th className="pb-2 font-bold">الحالة</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {swimmers.map((s) => {
+                      const a = s.adherence;
+                      return (
+                        <tr key={s.id} className="border-b border-slate-100 last:border-0">
+                          <td className="py-3 pr-2">
+                            <Link href={`/admin/swimmer/${s.id}`} className="group flex items-center gap-2.5">
+                              <UserAvatar name={s.fullName} image={s.image} size="sm" />
+                              <div className="min-w-0">
+                                <p className="flex max-w-[140px] items-center gap-1 truncate text-sm font-bold text-slate-800 group-hover:text-ocean-700">
+                                  {s.fullName}
+                                  <Eye className="h-3 w-3 shrink-0 text-ocean-400 opacity-0 transition-opacity group-hover:opacity-100" />
+                                </p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="max-w-[110px] truncate text-xs text-slate-400" dir="ltr">{s.email}</p>
+                                  <a
+                                    href={`/my-profile?userId=${s.id}`}
+                                    className="shrink-0 rounded-md bg-ocean-50 px-1.5 py-0.5 text-[10px] font-bold text-ocean-700 hover:bg-ocean-100"
+                                  >
+                                    ملخص
+                                  </a>
+                                </div>
+                              </div>
+                            </Link>
+                          </td>
+                          <td className="py-3 pr-2">
+                            {s.plan ? (
+                              <div>
+                                <p className="max-w-[150px] truncate text-xs font-bold text-ocean-700">{s.plan.title}</p>
+                                <p className="text-[10px] text-slate-400">{s.plan.goal ?? ''}</p>
+                              </div>
+                            ) : (
+                              <Badge color="gold">بدون خطة</Badge>
+                            )}
+                          </td>
+                          <td className="py-3 pr-2">
+                            <div className="text-xs font-black text-ocean-900">{formatNumber(s.today?.calories ?? 0)} سعرة</div>
+                            <div className="text-[10px] text-slate-400">
+                              {a?.calories === null || a?.calories === undefined
+                                ? 'لا توجد خطة'
+                                : `${a.calories}% من الخطة`}
+                            </div>
+                          </td>
+                          <td className="py-3 pr-2">
+                            <div className="flex flex-col gap-1">
+                              <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                                <Utensils className="h-3.5 w-3.5 text-gold-500" />
+                                {s.today?.mealsCount ?? 0} وجبة
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                                <Dumbbell className="h-3.5 w-3.5 text-emerald-500" />
+                                {s.today?.trainingsCount ?? 0} تمرين
+                              </span>
+                            </div>
+                          </td>
+                          {(['protein', 'carbs', 'fat', 'water'] as const).map((key) => {
+                            const pct = a?.[key];
+                            const label = key === 'protein' ? 'بروتين' : key === 'carbs' ? 'كارب' : key === 'fat' ? 'دهون' : 'ماء';
+                            const val = pct ?? 0;
+                            const color = pct === null ? 'bg-slate-200' : val >= 85 ? 'bg-emerald-500' : val >= 50 ? 'bg-amber-400' : 'bg-red-400';
+                            return (
+                              <td key={key} className="py-3 pr-2">
+                                <div className="min-w-[70px]">
+                                  <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+                                    <span>{label}</span>
+                                    <span className="font-bold">{pct === null ? '—' : `${val}%`}</span>
+                                  </div>
+                                  <div className="h-1.5 w-full rounded-full bg-slate-100">
+                                    <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${Math.max(2, Math.min(100, val))}%` }} />
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          })}
+                          <td className="py-3 pr-2 text-center font-bold text-slate-700">{s.activeDays7}/7</td>
+                          <td className="py-3 pr-2">
+                            <Badge color={s.status === 'active' ? 'green' : 'gold'}>{s.status === 'active' ? 'نشط' : 'معلق'}</Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </Card>
       </div>
