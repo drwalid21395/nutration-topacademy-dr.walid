@@ -129,11 +129,11 @@ export default async function AdminSwimmerDetailPage({
       {/* رأس السباح */}
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <UserAvatar name={swimmer.name} image={swimmer.image} size="xl" className="h-16 w-16" />
+          <div className="flex items-center gap-3 sm:gap-4">
+            <UserAvatar name={swimmer.name} image={swimmer.image} size="xl" className="h-12 w-12 sm:h-16 sm:w-16" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-black text-ocean-900">{profile?.fullName ?? swimmer.name}</h1>
+                <h1 className="text-lg font-black text-ocean-900 sm:text-2xl">{profile?.fullName ?? swimmer.name}</h1>
                 <Badge color={swimmer.status === 'active' ? 'green' : 'gold'}>
                   {swimmer.status === 'active' ? 'نشط' : 'معلق'}
                 </Badge>
@@ -146,12 +146,12 @@ export default async function AdminSwimmerDetailPage({
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/my-profile?userId=${swimmer.id}`} className="btn-secondary">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <Link href={`/my-profile?userId=${swimmer.id}`} className="btn-secondary w-full sm:w-auto">
               <ClipboardList className="h-4 w-4" />
               ملخص البيانات
             </Link>
-            <Link href={`/messages?userId=${swimmer.id}`} className="btn-secondary">
+            <Link href={`/messages?userId=${swimmer.id}`} className="btn-secondary w-full sm:w-auto">
               <MessageSquare className="h-4 w-4" />
               مراسلة
             </Link>
@@ -205,12 +205,12 @@ export default async function AdminSwimmerDetailPage({
                   <span>أُنشئت {formatDate(plan.createdAt)}</span>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Link href={`/plan/${plan.id}`} className="btn-primary">
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                <Link href={`/plan/${plan.id}`} className="btn-primary w-full sm:w-auto">
                   <Eye className="h-4 w-4" />
                   عرض البرنامج
                 </Link>
-                <a href={`/api/plan/${plan.id}/pdf`} className="btn-secondary">
+                <a href={`/api/plan/${plan.id}/pdf`} className="btn-secondary w-full sm:w-auto">
                   <Download className="h-4 w-4" />
                   تحميل PDF
                 </a>
@@ -345,18 +345,18 @@ export default async function AdminSwimmerDetailPage({
       <div className="mt-5">
         <Card className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <FileText className="h-6 w-6 text-ocean-500" />
-            <div>
+            <FileText className="h-6 w-6 shrink-0 text-ocean-500" />
+            <div className="min-w-0">
               <p className="text-sm font-bold text-slate-800">تقرير الالتزام التفصيلي</p>
               <p className="text-xs text-slate-400">تقرير PDF أو Excel للسباح خلال آخر 7 أيام.</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <a href={`/api/admin/reports?format=pdf&userId=${swimmer.id}&days=7`} className="btn-primary">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <a href={`/api/admin/reports?format=pdf&userId=${swimmer.id}&days=7`} className="btn-primary w-full sm:w-auto">
               <Download className="h-4 w-4" />
               تقرير PDF
             </a>
-            <a href={`/api/admin/reports?format=csv&userId=${swimmer.id}&days=7`} className="btn-secondary">
+            <a href={`/api/admin/reports?format=csv&userId=${swimmer.id}&days=7`} className="btn-secondary w-full sm:w-auto">
               <Download className="h-4 w-4" />
               تقرير Excel
             </a>
