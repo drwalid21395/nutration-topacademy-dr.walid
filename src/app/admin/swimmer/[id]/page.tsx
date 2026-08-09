@@ -13,11 +13,14 @@ import {
   ArrowRight,
   ClipboardList,
   Pencil,
+  Scale,
+  Camera,
+  Bell,
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/layout/app-shell';
-import { Card, Badge, EmptyState } from '@/components/ui';
+import { Card, CardHeader, Badge, EmptyState } from '@/components/ui';
 import { UserAvatar } from '@/components/ui/user-avatar';
 import { formatNumber, formatDate, formatShortDate, startOfToday } from '@/lib/utils';
 import { ROLES, PLAN_TYPES } from '@/lib/constants';
@@ -126,11 +129,11 @@ export default async function AdminSwimmerDetailPage({
         عودة إلى لوحة الإدارة
       </Link>
 
-      {/* رأس السباح */}
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* بطاقة رأس السباح */}
+      <Card className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
-            <UserAvatar name={swimmer.name} image={swimmer.image} size="xl" className="h-12 w-12 sm:h-16 sm:w-16" />
+            <UserAvatar name={swimmer.name} image={swimmer.image} size="xl" className="h-14 w-14 sm:h-16 sm:w-16" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-lg font-black text-ocean-900 sm:text-2xl">{profile?.fullName ?? swimmer.name}</h1>
@@ -185,36 +188,55 @@ export default async function AdminSwimmerDetailPage({
         </div>
       </Card>
 
-      {/* الخطة الحالية */}
+      {/* بطاقة الخطة الغذائية الحالية */}
       <div className="mt-5">
         {plan ? (
-          <Card>
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-black text-ocean-900">{plan.title}</h2>
+          <Card className="p-4 sm:p-5">
+            <CardHeader
+              icon={<Salad className="h-5 w-5" />}
+              title="الخطة الغذائية الحالية"
+              action={
+                <div className="flex flex-wrap gap-2">
                   <Badge color="gold">{PLAN_TYPES[plan.planType as keyof typeof PLAN_TYPES] ?? 'خطة غذائية'}</Badge>
                   <Badge>{plan.durationDays} يوم</Badge>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                  <span>🔥 {formatNumber(plan.totalCalories)} سعرة</span>
-                  <span>بروتين {formatNumber(plan.proteinG, 1)} جم</span>
-                  <span>كربو {formatNumber(plan.carbsG, 1)} جم</span>
-                  <span>دهون {formatNumber(plan.fatG, 1)} جم</span>
-                  <span>ماء {formatNumber((plan.waterMl ?? 0) / 1000, 1)} لتر</span>
-                  <span>أُنشئت {formatDate(plan.createdAt)}</span>
-                </div>
+              }
+            />
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="rounded-xl bg-ocean-50 p-3 text-center">
+                <p className="text-[10px] font-semibold text-slate-400">السعرات</p>
+                <p className="mt-0.5 text-lg font-black text-ocean-900">{formatNumber(plan.totalCalories)}</p>
               </div>
-              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                <Link href={`/plan/${plan.id}`} className="btn-primary w-full sm:w-auto">
-                  <Eye className="h-4 w-4" />
-                  عرض البرنامج
-                </Link>
-                <a href={`/api/plan/${plan.id}/pdf`} className="btn-secondary w-full sm:w-auto">
-                  <Download className="h-4 w-4" />
-                  تحميل PDF
-                </a>
+              <div className="rounded-xl bg-gold-300/20 p-3 text-center">
+                <p className="text-[10px] font-semibold text-slate-400">البروتين</p>
+                <p className="mt-0.5 text-lg font-black text-ocean-900">{formatNumber(plan.proteinG, 1)} جم</p>
               </div>
+              <div className="rounded-xl bg-emerald-100 p-3 text-center">
+                <p className="text-[10px] font-semibold text-slate-400">الكربوهيدرات</p>
+                <p className="mt-0.5 text-lg font-black text-ocean-900">{formatNumber(plan.carbsG, 1)} جم</p>
+              </div>
+              <div className="rounded-xl bg-red-50 p-3 text-center">
+                <p className="text-[10px] font-semibold text-slate-400">الدهون</p>
+                <p className="mt-0.5 text-lg font-black text-ocean-900">{formatNumber(plan.fatG, 1)} جم</p>
+              </div>
+              <div className="rounded-xl bg-lagoon-100 p-3 text-center">
+                <p className="text-[10px] font-semibold text-slate-400">الماء</p>
+                <p className="mt-0.5 text-lg font-black text-ocean-900">{formatNumber((plan.waterMl ?? 0) / 1000, 1)} لتر</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 text-center">
+                <p className="text-[10px] font-semibold text-slate-400">أُنشئت</p>
+                <p className="mt-0.5 text-sm font-bold text-ocean-900">{formatShortDate(plan.createdAt)}</p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href={`/plan/${plan.id}`} className="btn-primary w-full sm:w-auto">
+                <Eye className="h-4 w-4" />
+                عرض البرنامج
+              </Link>
+              <a href={`/api/plan/${plan.id}/pdf`} className="btn-secondary w-full sm:w-auto">
+                <Download className="h-4 w-4" />
+                تحميل PDF
+              </a>
             </div>
           </Card>
         ) : (
@@ -232,10 +254,11 @@ export default async function AdminSwimmerDetailPage({
         )}
       </div>
 
+      {/* شبكة بطاقات سجل النشاط */}
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         {/* آخر الوجبات المسجلة */}
         <Card className="p-4 sm:p-5">
-          <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">آخر الوجبات المسجلة</h2>
+          <CardHeader icon={<Utensils className="h-5 w-5" />} title="آخر الوجبات المسجلة" />
           {foodWeek.length === 0 ? (
             <p className="text-sm text-slate-400">لا توجد وجبات مسجلة خلال الأسبوع الأخير.</p>
           ) : (
@@ -258,7 +281,7 @@ export default async function AdminSwimmerDetailPage({
 
         {/* آخر التمارين */}
         <Card className="p-4 sm:p-5">
-          <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">آخر التمارين</h2>
+          <CardHeader icon={<Dumbbell className="h-5 w-5" />} title="آخر التمارين" />
           {trainings.length === 0 ? (
             <p className="text-sm text-slate-400">لا توجد تمارين مسجلة.</p>
           ) : (
@@ -282,13 +305,13 @@ export default async function AdminSwimmerDetailPage({
           )}
         </Card>
 
-        {/* آخر الأوزان */}
+        {/* آخر قياسات الوزن */}
         <Card className="p-4 sm:p-5">
-          <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">آخر قياسات الوزن</h2>
+          <CardHeader icon={<Scale className="h-5 w-5" />} title="آخر قياسات الوزن" />
           {weights.length === 0 ? (
             <p className="text-sm text-slate-400">لا توجد قياسات وزن.</p>
           ) : (
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {weights.map((w) => (
                 <div key={w.id} className="rounded-xl bg-slate-50 p-3 text-center">
                   <p className="text-base font-black text-ocean-900">{formatNumber(w.weightKg, 1)} كجم</p>
@@ -299,68 +322,67 @@ export default async function AdminSwimmerDetailPage({
           )}
         </Card>
 
-        {/* تحليلات الصور والإشعارات */}
-        <div className="space-y-5">
-          <Card className="p-4 sm:p-5">
-            <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">تحليلات الوجبات (AI)</h2>
-            {analyses.length === 0 ? (
-              <p className="text-sm text-slate-400">لا توجد تحليلات.</p>
-            ) : (
-              <div className="space-y-2">
-                {analyses.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between gap-2.5 rounded-xl bg-slate-50 px-2.5 py-2 sm:gap-3 sm:px-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-slate-800">{a.foods ?? 'وجبة محللة'}</p>
-                      <p className="text-[10px] text-slate-400">{formatShortDate(a.createdAt)} · {a.provider}</p>
-                    </div>
-                    <p className="shrink-0 text-xs font-black text-ocean-900">{formatNumber(a.totalCalories)} سعرة</p>
+        {/* تحليلات الوجبات (AI) */}
+        <Card className="p-4 sm:p-5">
+          <CardHeader icon={<Camera className="h-5 w-5" />} title="تحليلات الوجبات (AI)" />
+          {analyses.length === 0 ? (
+            <p className="text-sm text-slate-400">لا توجد تحليلات.</p>
+          ) : (
+            <div className="space-y-2">
+              {analyses.map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-2.5 rounded-xl bg-slate-50 px-2.5 py-2 sm:gap-3 sm:px-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-slate-800">{a.foods ?? 'وجبة محللة'}</p>
+                    <p className="text-[10px] text-slate-400">{formatShortDate(a.createdAt)} · {a.provider}</p>
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
+                  <p className="shrink-0 text-xs font-black text-ocean-900">{formatNumber(a.totalCalories)} سعرة</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
-          <Card className="p-4 sm:p-5">
-            <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">الإشعارات</h2>
-            {notifications.length === 0 ? (
-              <p className="text-sm text-slate-400">لا توجد إشعارات.</p>
-            ) : (
-              <div className="space-y-2">
-                {notifications.map((n) => (
-                  <div key={n.id} className="rounded-xl bg-slate-50 px-2.5 py-2 sm:px-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-slate-700">{n.title}</p>
-                      <span className="shrink-0 text-[10px] text-slate-400">{formatShortDate(n.createdAt)}</span>
-                    </div>
-                    {n.body && <p className="mt-0.5 text-xs text-slate-500">{n.body}</p>}
+        {/* الإشعارات */}
+        <Card className="p-4 sm:p-5 lg:col-span-2">
+          <CardHeader icon={<Bell className="h-5 w-5" />} title="الإشعارات" />
+          {notifications.length === 0 ? (
+            <p className="text-sm text-slate-400">لا توجد إشعارات.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {notifications.map((n) => (
+                <div key={n.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-bold text-slate-700">{n.title}</p>
+                    <span className="shrink-0 text-[10px] text-slate-400">{formatShortDate(n.createdAt)}</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
+                  {n.body && <p className="mt-0.5 text-xs text-slate-500">{n.body}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
 
-      {/* تقرير التفصيلي */}
+      {/* بطاقة التقرير */}
       <div className="mt-5">
-        <Card className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <FileText className="h-6 w-6 shrink-0 text-ocean-500" />
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-slate-800">تقرير الالتزام التفصيلي</p>
-              <p className="text-xs text-slate-400">تقرير PDF أو Excel للسباح خلال آخر 7 أيام.</p>
-            </div>
-          </div>
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <a href={`/api/admin/reports?format=pdf&userId=${swimmer.id}&days=7`} className="btn-primary w-full sm:w-auto">
-              <Download className="h-4 w-4" />
-              تقرير PDF
-            </a>
-            <a href={`/api/admin/reports?format=csv&userId=${swimmer.id}&days=7`} className="btn-secondary w-full sm:w-auto">
-              <Download className="h-4 w-4" />
-              تقرير Excel
-            </a>
-          </div>
+        <Card className="p-4 sm:p-5">
+          <CardHeader
+            icon={<FileText className="h-5 w-5" />}
+            title="تقرير الالتزام التفصيلي"
+            subtitle="تقرير PDF أو Excel للسباح خلال آخر 7 أيام."
+            action={
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                <a href={`/api/admin/reports?format=pdf&userId=${swimmer.id}&days=7`} className="btn-primary w-full sm:w-auto">
+                  <Download className="h-4 w-4" />
+                  تقرير PDF
+                </a>
+                <a href={`/api/admin/reports?format=csv&userId=${swimmer.id}&days=7`} className="btn-secondary w-full sm:w-auto">
+                  <Download className="h-4 w-4" />
+                  تقرير Excel
+                </a>
+              </div>
+            }
+          />
         </Card>
       </div>
     </AppShell>
