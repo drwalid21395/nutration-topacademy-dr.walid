@@ -27,6 +27,7 @@ import {
   Menu,
   X,
   Activity,
+  BookOpen,
   ChevronDown,
 } from 'lucide-react';
 import { Logo } from '@/components/layout/logo';
@@ -52,6 +53,7 @@ const GROUPS = [
     icon: Salad,
     items: [
       { href: '/calculator', label: 'حاسبة الاحتياجات', icon: Calculator },
+      { href: '/my-plans', label: 'البرنامج الغذائي', icon: BookOpen },
       { href: '/plan/create', label: 'إنشاء خطة غذائية', icon: Salad },
       { href: '/meal-analyzer', label: 'محلل الوجبات', icon: Camera },
       { href: '/food-log', label: 'سجل الطعام', icon: Utensils },
@@ -85,6 +87,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/swimmer-profile': 'ملف السباح',
   '/my-profile': 'ملخص بياناتي',
   '/calculator': 'حاسبة الاحتياجات',
+  '/my-plans': 'البرنامج الغذائي',
   '/plan/create': 'إنشاء خطة غذائية',
   '/meal-analyzer': 'محلل الوجبات',
   '/food-log': 'سجل الطعام',

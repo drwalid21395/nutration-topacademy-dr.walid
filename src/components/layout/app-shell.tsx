@@ -19,6 +19,7 @@ import {
   Bell,
   MessageSquare,
   Settings,
+  BookOpen,
   Users,
   ShieldCheck,
   UserCheck,
@@ -32,6 +33,7 @@ const NAV = [
   { href: '/swimmer-profile', label: 'ملف السباح', icon: ClipboardList },
   { href: '/my-profile', label: 'ملخص بياناتي', icon: UserCheck },
   { href: '/calculator', label: 'حاسبة الاحتياجات', icon: Calculator },
+  { href: '/my-plans', label: 'البرنامج الغذائي', icon: BookOpen },
   { href: '/plan/create', label: 'إنشاء خطة غذائية', icon: Salad },
   { href: '/meal-analyzer', label: 'محلل الوجبات', icon: Camera },
   { href: '/food-log', label: 'سجل الطعام', icon: Utensils },
@@ -86,21 +88,27 @@ export function AppShell({
             </Link>
           ))}
           {roleItems.length > 0 && <div className="my-2 border-t border-slate-100" />}
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
-                pathname === item.href
-                  ? 'bg-ocean-600 text-white shadow-md'
-                  : 'text-slate-600 hover:bg-ocean-50 hover:text-ocean-700'
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              {item.label}
-            </Link>
-          ))}
+          {NAV.map((item) => {
+            const isActive =
+              item.href === '/my-plans'
+                ? pathname === '/my-plans' || pathname.startsWith('/plan/')
+                : pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors',
+                  isActive
+                    ? 'bg-ocean-600 text-white shadow-md'
+                    : 'text-slate-600 hover:bg-ocean-50 hover:text-ocean-700'
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            );
+          })}
           <div className="my-2 border-t border-slate-100" />
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
