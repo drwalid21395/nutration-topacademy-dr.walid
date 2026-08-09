@@ -190,27 +190,23 @@ export function ProfileSummary({
     <div className="space-y-6">
       {/* البطاقة الرئيسية */}
       <Card>
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-ocean-700 via-ocean-800 to-ocean-950 px-5 pb-16 pt-8 text-white">
-          <div className="absolute -left-10 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
-          <div className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-gold-300/20 blur-xl" />
-          <div className="relative flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-bold text-gold-300">{ROLES[user.role as keyof typeof ROLES] ?? user.role}</p>
-            {isOwn ? (
-              <Link href="/swimmer-profile" className="flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur transition-colors hover:bg-white/25">
-                <Pencil className="h-3.5 w-3.5" />
-                تعديل الملف
-              </Link>
-            ) : null}
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-2xl bg-gradient-to-l from-ocean-700 via-ocean-800 to-ocean-950 px-5 py-3 text-white">
+          <p className="text-sm font-bold text-gold-300">{ROLES[user.role as keyof typeof ROLES] ?? user.role}</p>
+          {isOwn ? (
+            <Link href="/swimmer-profile" className="flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur transition-colors hover:bg-white/25">
+              <Pencil className="h-3.5 w-3.5" />
+              تعديل الملف
+            </Link>
+          ) : null}
         </div>
-        <div className="-mt-14 flex flex-wrap items-end gap-5 px-5 pb-2">
+        <div className="flex flex-wrap items-center gap-5 px-5 py-5">
           <UserAvatar
             name={name}
             image={user.image}
             size="xl"
-            className="h-24 w-24 rounded-full border-4 border-white shadow-lg ring-2 ring-ocean-100"
+            className="h-24 w-24 shrink-0 rounded-full ring-2 ring-ocean-100"
           />
-          <div className="min-w-0 flex-1 pb-1">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-2xl font-black text-ocean-900">{name}</h1>
               {profile?.gender === 'male' ? <Badge color="slate">ذكر</Badge> : profile?.gender === 'female' ? <Badge color="gold">أنثى</Badge> : null}
