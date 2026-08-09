@@ -47,6 +47,10 @@ export async function GET() {
         where: { date: { gte: todayStart } },
         select: { amountMl: true },
       },
+      trainingLogs: {
+        where: { date: { gte: todayStart } },
+        select: { sessionType: true, durationMin: true, distanceM: true },
+      },
     },
   });
 
@@ -117,6 +121,10 @@ export async function GET() {
         carbsG: Math.round(food.carbsG),
         fatG: Math.round(food.fatG),
         waterMl: Math.round(waterMl),
+        mealsCount: s.foodLogs.length,
+        trainingsCount: s.trainingLogs.length,
+        trainingMin: s.trainingLogs.reduce((a, t) => a + (t.durationMin ?? 0), 0),
+        trainingDistance: s.trainingLogs.reduce((a, t) => a + (t.distanceM ?? 0), 0),
       },
       adherence: plan
         ? {

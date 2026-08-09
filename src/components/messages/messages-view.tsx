@@ -21,9 +21,17 @@ function displayName(c: Conversation): string {
   return c.fullName || c.name || (c.role === 'admin' ? 'الدكتور' : 'سباح');
 }
 
-export function MessagesView({ myId, myRole }: { myId: string; myRole: string }) {
+export function MessagesView({
+  myId,
+  myRole,
+  initialUserId,
+}: {
+  myId: string;
+  myRole: string;
+  initialUserId?: string;
+}) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialUserId ?? null);
   const [loading, setLoading] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -34,6 +42,9 @@ export function MessagesView({ myId, myRole }: { myId: string; myRole: string })
       setConversations(data.conversations ?? []);
       if (myRole !== 'admin' && data.conversations?.length > 0) {
         setSelected(data.conversations[0].id);
+      } else if (initialUserId) {
+        const exists = data.conversations?.some((c: Conversation) => c.id === initialUserId);
+        if (exists) setSelected(initialUserId);
       }
     }
     setLoading(false);

@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Users, FileText, Utensils, Dumbbell, Trophy, ShieldCheck, Ban, CheckCircle2, ClipboardCheck } from 'lucide-react';
+import Link from 'next/link';
+import { Users, FileText, Utensils, Dumbbell, Trophy, ShieldCheck, Ban, CheckCircle2, ClipboardCheck, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, Badge, Alert, EmptyState } from '@/components/ui';
 import { UserAvatar } from '@/components/ui/user-avatar';
-import { formatDate } from '@/lib/utils';
+import { AdminActivityBell } from '@/components/admin/admin-activity-bell';
+import { formatDate, formatNumber } from '@/lib/utils';
 import { ROLES } from '@/lib/constants';
 
 const ROLE_BADGE: Record<string, 'ocean' | 'gold' | 'green' | 'red' | 'slate'> = {
@@ -70,14 +72,17 @@ export function AdminDashboard() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-600">
-          <ShieldCheck className="h-6 w-6" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-red-600">
+            <ShieldCheck className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-ocean-900">لوحة الإدارة</h1>
+            <p className="text-sm text-slate-500">نظرة شاملة على المنصة وإدارة المستخدمين.</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-black text-ocean-900">لوحة الإدارة</h1>
-          <p className="text-sm text-slate-500">نظرة شاملة على المنصة وإدارة المستخدمين.</p>
-        </div>
+        <AdminActivityBell />
       </div>
 
       {message && <div className="mb-4"><Alert variant="success">{message}</Alert></div>}
@@ -132,7 +137,8 @@ export function AdminDashboard() {
                   <tr className="border-b border-slate-200 text-right text-xs text-slate-500">
                     <th className="pb-2 pr-2 font-bold">السباح</th>
                     <th className="pb-2 pr-2 font-bold">الخطة</th>
-                    <th className="pb-2 pr-2 font-bold">السعرات</th>
+                    <th className="pb-2 pr-2 font-bold">السعرات اليوم</th>
+                    <th className="pb-2 pr-2 font-bold">وجبات/تمارين</th>
                     <th className="pb-2 pr-2 font-bold">البروتين</th>
                     <th className="pb-2 pr-2 font-bold">الكربوهيدرات</th>
                     <th className="pb-2 pr-2 font-bold">الدهون</th>
@@ -147,10 +153,13 @@ export function AdminDashboard() {
                     return (
                       <tr key={s.id} className="border-b border-slate-100 last:border-0">
                         <td className="py-3 pr-2">
-                          <div className="flex items-center gap-2.5">
+                          <Link href={`/admin/swimmer/${s.id}`} className="group flex items-center gap-2.5">
                             <UserAvatar name={s.fullName} image={s.image} size="sm" />
                             <div className="min-w-0">
-                              <p className="max-w-[140px] truncate text-sm font-bold text-slate-800">{s.fullName}</p>
+                              <p className="flex max-w-[140px] items-center gap-1 truncate text-sm font-bold text-slate-800 group-hover:text-ocean-700">
+                                {s.fullName}
+                                <Eye className="h-3 w-3 shrink-0 text-ocean-400 opacity-0 transition-opacity group-hover:opacity-100" />
+                              </p>
                               <div className="flex items-center gap-1.5">
                                 <p className="max-w-[110px] truncate text-xs text-slate-400" dir="ltr">{s.email}</p>
                                 <a
@@ -161,7 +170,7 @@ export function AdminDashboard() {
                                 </a>
                               </div>
                             </div>
-                          </div>
+                          </Link>
                         </td>
                         <td className="py-3 pr-2">
                           {s.plan ? (
@@ -173,9 +182,29 @@ export function AdminDashboard() {
                             <Badge color="gold">بدون خطة</Badge>
                           )}
                         </td>
-                        {(['calories', 'protein', 'carbs', 'fat', 'water'] as const).map((key) => {
+                        <td className="py-3 pr-2">
+                          <div className="text-xs font-black text-ocean-900">{formatNumber(s.today?.calories ?? 0)} سعرة</div>
+                          <div className="text-[10px] text-slate-400">
+                            {a?.calories === null || a?.calories === undefined
+                              ? 'لا توجد خطة'
+                              : `${a.calories}% من الخطة`}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-2">
+                          <div className="flex flex-col gap-1">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                              <Utensils className="h-3.5 w-3.5 text-gold-500" />
+                              {s.today?.mealsCount ?? 0} وجبة
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700">
+                              <Dumbbell className="h-3.5 w-3.5 text-emerald-500" />
+                              {s.today?.trainingsCount ?? 0} تمرين
+                            </span>
+                          </div>
+                        </td>
+                        {(['protein', 'carbs', 'fat', 'water'] as const).map((key) => {
                           const pct = a?.[key];
-                          const label = key === 'protein' ? 'بروتين' : key === 'carbs' ? 'كارب' : key === 'fat' ? 'دهون' : key === 'water' ? 'ماء' : 'سعرات';
+                          const label = key === 'protein' ? 'بروتين' : key === 'carbs' ? 'كارب' : key === 'fat' ? 'دهون' : 'ماء';
                           const val = pct ?? 0;
                           const color = pct === null ? 'bg-slate-200' : val >= 85 ? 'bg-emerald-500' : val >= 50 ? 'bg-amber-400' : 'bg-red-400';
                           return (
