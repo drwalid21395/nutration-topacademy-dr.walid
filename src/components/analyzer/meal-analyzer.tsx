@@ -125,7 +125,34 @@ export function MealAnalyzer({
     setCameraReady(false);
   }
 
-  function capture() {
+  // ضغط الصورة في المتصفح حتى لا يتجاوز حجم الطلب حد الخادم (يحدث خطأ JSON عند تجاوزه)
+  function compressImage(dataUrl: string, maxDim = 1280, quality = 0.78): Promise<string> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          const scale = maxDim / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
+  async function capture() {
     const video = videoRef.current;
     if (!video) return;
     if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
@@ -138,7 +165,7 @@ export function MealAnalyzer({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setPhoto(canvas.toDataURL('image/jpeg', 0.85));
+    setPhoto(await compressImage(canvas.toDataURL('image/jpeg', 0.85)));
     stopCamera();
     setResult(null);
     setEdited(null);
@@ -149,8 +176,8 @@ export function MealAnalyzer({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      setPhoto(String(reader.result));
+    reader.onload = async () => {
+      setPhoto(await compressImage(String(reader.result)));
       setResult(null);
       setEdited(null);
       setAdded(false);
@@ -176,10 +203,15 @@ export function MealAnalyzer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: photo, consent }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'تعذر التحليل');
-      setResult(data.result);
-      setEdited(data.result);
+      let data: Record<string, unknown> = {};
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('الخادم رفض الصورة (الحجم أكبر من المسموح). أعد التقاط صورة أقرب وأخفض جودة ثم حاول مجددًا.');
+      }
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'تعذر التحليل');
+      setResult(data.result as MealAnalysisResult);
+      setEdited(data.result as MealAnalysisResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'تعذر التحليل');
     } finally {

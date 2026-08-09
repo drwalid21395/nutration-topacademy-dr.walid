@@ -8,7 +8,7 @@ import { getVisionProvider, ANALYZE_DISCLAIMER } from '@/services/ai';
 import { rateLimit, audit } from '@/lib/security';
 import { syncToGoogleDrive } from '@/lib/google-sync';
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB — أقل من حد جسم طلبات Vercel (~4.5MB) بعد ترميز base64
 
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const imageBytes = Buffer.from(base64, 'base64');
   if (imageBytes.length > MAX_IMAGE_BYTES) {
     return NextResponse.json(
-      { error: 'حجم الصورة يتجاوز 5 ميجابايت — التقط صورة أخف' },
+      { error: 'حجم الصورة يتجاوز 3 ميجابايت — التقط صورة أقرب وأخفض جودة' },
       { status: 422 }
     );
   }
