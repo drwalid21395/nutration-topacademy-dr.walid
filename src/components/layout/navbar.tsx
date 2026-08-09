@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { Menu, X, LogIn, UserPlus, LayoutDashboard, Bell, LogOut } from 'lucide-react';
 import { Logo } from '@/components/layout/logo';
+import { AppHeader } from '@/components/layout/app-header';
 import { cn } from '@/lib/utils';
 
 const NAV_LINKS = [
@@ -17,7 +18,13 @@ const NAV_LINKS = [
   { href: '/contact', label: 'تواصل معنا' },
 ];
 
-export function Navbar({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
+export function Navbar({
+  isLoggedIn = false,
+  user,
+}: {
+  isLoggedIn?: boolean;
+  user?: { name?: string | null; email?: string | null; image?: string | null; role: string } | null;
+}) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
@@ -30,6 +37,10 @@ export function Navbar({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   }, []);
 
   useEffect(() => setOpen(false), [pathname]);
+
+  if (isLoggedIn && user) {
+    return <AppHeader user={user} />;
+  }
 
   return (
     <header

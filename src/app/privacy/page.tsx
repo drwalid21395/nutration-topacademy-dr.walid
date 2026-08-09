@@ -44,7 +44,7 @@ export default async function PrivacyPage() {
 
   return (
     <>
-      <Navbar isLoggedIn={!!user} />
+      <Navbar isLoggedIn={!!user} user={user} />
       <main className="water-bg">
         <section className="container-app py-16">
           <div className="mx-auto max-w-3xl">

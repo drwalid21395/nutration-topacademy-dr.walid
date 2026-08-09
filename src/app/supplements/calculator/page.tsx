@@ -9,7 +9,7 @@ export default async function SupplementsCalculatorPage() {
   const user = await getCurrentUser();
   return (
     <>
-      <Navbar isLoggedIn={!!user} />
+      <Navbar isLoggedIn={!!user} user={user} />
       <main className="water-bg min-h-[70vh]">
         <div className="container-app py-12">
           <SupplementsCalculator />

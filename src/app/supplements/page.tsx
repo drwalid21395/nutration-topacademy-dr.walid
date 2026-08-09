@@ -19,7 +19,7 @@ export default async function SupplementsPage() {
 
   return (
     <>
-      <Navbar isLoggedIn={!!user} />
+      <Navbar isLoggedIn={!!user} user={user} />
       <main className="water-bg min-h-[70vh]">
         <div className="container-app py-12">
           <div className="mb-8 overflow-hidden rounded-3xl bg-gradient-to-br from-ocean-700 via-ocean-800 to-ocean-950 p-6 text-white shadow-xl sm:p-10">

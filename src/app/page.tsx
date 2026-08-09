@@ -55,7 +55,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <Navbar isLoggedIn={isLoggedIn} />
+      <Navbar isLoggedIn={isLoggedIn} user={user} />
 
       {/* البطل */}
       <section className="relative overflow-hidden bg-hero-waves text-white">
