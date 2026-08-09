@@ -36,6 +36,17 @@ export function formatDate(date: Date | string | null | undefined): string {
   });
 }
 
+/** تنسيق تاريخ عربي مختصر للجوال */
+export function formatShortDate(date: Date | string | null | undefined): string {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString('ar-EG', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  });
+}
+
 /** نسبة آمنة 0-100 */
 export function clampPercent(n: number): number {
   return Math.min(100, Math.max(0, n));

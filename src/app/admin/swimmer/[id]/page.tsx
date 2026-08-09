@@ -19,7 +19,7 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/layout/app-shell';
 import { Card, Badge, EmptyState } from '@/components/ui';
 import { UserAvatar } from '@/components/ui/user-avatar';
-import { formatNumber, formatDate, startOfToday } from '@/lib/utils';
+import { formatNumber, formatDate, formatShortDate, startOfToday } from '@/lib/utils';
 import { ROLES, PLAN_TYPES } from '@/lib/constants';
 
 export const metadata = { title: 'متابعة السباح' };
@@ -234,17 +234,17 @@ export default async function AdminSwimmerDetailPage({
 
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         {/* آخر الوجبات المسجلة */}
-        <Card>
-          <h2 className="mb-3 text-base font-bold text-ocean-900">آخر الوجبات المسجلة</h2>
+        <Card className="p-4 sm:p-5">
+          <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">آخر الوجبات المسجلة</h2>
           {foodWeek.length === 0 ? (
             <p className="text-sm text-slate-400">لا توجد وجبات مسجلة خلال الأسبوع الأخير.</p>
           ) : (
             <div className="space-y-2">
               {foodWeek.slice(0, 10).map((f) => (
-                <div key={f.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                <div key={f.id} className="flex items-center justify-between gap-2.5 rounded-xl bg-slate-50 px-2.5 py-2 sm:gap-3 sm:px-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-slate-800">{f.foodName}</p>
-                    <p className="text-[10px] text-slate-400">{formatDate(f.createdAt)}</p>
+                    <p className="text-[10px] text-slate-400">{formatShortDate(f.createdAt)}</p>
                   </div>
                   <div className="shrink-0 text-left">
                     <p className="text-xs font-black text-ocean-900">{formatNumber(f.calories)} سعرة</p>
@@ -257,18 +257,18 @@ export default async function AdminSwimmerDetailPage({
         </Card>
 
         {/* آخر التمارين */}
-        <Card>
-          <h2 className="mb-3 text-base font-bold text-ocean-900">آخر التمارين</h2>
+        <Card className="p-4 sm:p-5">
+          <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">آخر التمارين</h2>
           {trainings.length === 0 ? (
             <p className="text-sm text-slate-400">لا توجد تمارين مسجلة.</p>
           ) : (
             <div className="space-y-2">
               {trainings.map((t) => (
-                <div key={t.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                <div key={t.id} className="flex items-center justify-between gap-2.5 rounded-xl bg-slate-50 px-2.5 py-2 sm:gap-3 sm:px-3">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-800">{t.sessionType === 'gym' ? 'تمرين لياقة' : 'تمرين سباحة'}</p>
                     <p className="text-[10px] text-slate-400">
-                      {formatDate(t.date)}
+                      {formatShortDate(t.date)}
                       {t.intensity ? ` · شدّة ${t.intensity}` : ''}
                     </p>
                   </div>
@@ -283,16 +283,16 @@ export default async function AdminSwimmerDetailPage({
         </Card>
 
         {/* آخر الأوزان */}
-        <Card>
-          <h2 className="mb-3 text-base font-bold text-ocean-900">آخر قياسات الوزن</h2>
+        <Card className="p-4 sm:p-5">
+          <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">آخر قياسات الوزن</h2>
           {weights.length === 0 ? (
             <p className="text-sm text-slate-400">لا توجد قياسات وزن.</p>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
               {weights.map((w) => (
                 <div key={w.id} className="rounded-xl bg-slate-50 p-3 text-center">
                   <p className="text-base font-black text-ocean-900">{formatNumber(w.weightKg, 1)} كجم</p>
-                  <p className="text-[10px] text-slate-400">{formatDate(w.date)}</p>
+                  <p className="text-[10px] text-slate-400">{formatShortDate(w.date)}</p>
                 </div>
               ))}
             </div>
@@ -301,17 +301,17 @@ export default async function AdminSwimmerDetailPage({
 
         {/* تحليلات الصور والإشعارات */}
         <div className="space-y-5">
-          <Card>
-            <h2 className="mb-3 text-base font-bold text-ocean-900">تحليلات الوجبات (AI)</h2>
+          <Card className="p-4 sm:p-5">
+            <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">تحليلات الوجبات (AI)</h2>
             {analyses.length === 0 ? (
               <p className="text-sm text-slate-400">لا توجد تحليلات.</p>
             ) : (
               <div className="space-y-2">
                 {analyses.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                  <div key={a.id} className="flex items-center justify-between gap-2.5 rounded-xl bg-slate-50 px-2.5 py-2 sm:gap-3 sm:px-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold text-slate-800">{a.foods ?? 'وجبة محللة'}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(a.createdAt)} · {a.provider}</p>
+                      <p className="text-[10px] text-slate-400">{formatShortDate(a.createdAt)} · {a.provider}</p>
                     </div>
                     <p className="shrink-0 text-xs font-black text-ocean-900">{formatNumber(a.totalCalories)} سعرة</p>
                   </div>
@@ -320,17 +320,17 @@ export default async function AdminSwimmerDetailPage({
             )}
           </Card>
 
-          <Card>
-            <h2 className="mb-3 text-base font-bold text-ocean-900">الإشعارات</h2>
+          <Card className="p-4 sm:p-5">
+            <h2 className="mb-2.5 text-sm font-bold text-ocean-900 sm:mb-3 sm:text-base">الإشعارات</h2>
             {notifications.length === 0 ? (
               <p className="text-sm text-slate-400">لا توجد إشعارات.</p>
             ) : (
               <div className="space-y-2">
                 {notifications.map((n) => (
-                  <div key={n.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                  <div key={n.id} className="rounded-xl bg-slate-50 px-2.5 py-2 sm:px-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-bold text-slate-700">{n.title}</p>
-                      <span className="text-[10px] text-slate-400">{formatDate(n.createdAt)}</span>
+                      <span className="shrink-0 text-[10px] text-slate-400">{formatShortDate(n.createdAt)}</span>
                     </div>
                     {n.body && <p className="mt-0.5 text-xs text-slate-500">{n.body}</p>}
                   </div>
