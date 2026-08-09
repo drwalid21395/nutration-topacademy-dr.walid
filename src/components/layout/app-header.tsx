@@ -138,7 +138,7 @@ export function AppHeader({
           >
             <Menu className="h-6 w-6" />
           </button>
-          <nav className="flex items-center gap-1" aria-label="التنقل الرئيسي">
+          <nav className="hidden items-center gap-1 lg:flex" aria-label="التنقل الرئيسي">
             {GROUPS.map((g) => {
               const isOpen = openMenu === g.key;
               const isActive = g.items.some((i) => pathname === i.href || pathname.startsWith(i.href + '/'));
@@ -154,8 +154,7 @@ export function AppHeader({
                       isActive ? 'bg-ocean-600 text-white shadow-md' : 'text-slate-600 hover:bg-ocean-50 hover:text-ocean-700'
                     )}
                   >
-                    <g.icon className="h-4 w-4 shrink-0" />
-                    <span className="hidden md:inline">{g.label}</span>
+                    <span>{g.label}</span>
                     <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', isOpen && 'rotate-180')} />
                   </button>
                   {isOpen && !isMobile() && (
@@ -192,7 +191,7 @@ export function AppHeader({
           <span className="hidden rounded-full bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-700 sm:block">
             {ROLES[user.role as keyof typeof ROLES] ?? user.role}
           </span>
-          <Link href="/swimmer-profile" className="flex items-center gap-2" aria-label="ملف بيانات السباح">
+          <Link href="/my-profile" className="flex items-center gap-2" aria-label="ملخص بيانات السباح">
             <UserAvatar name={user.name} image={user.image} size="md" />
             <div className="hidden sm:block">
               <p className="text-sm font-bold text-slate-800">{user.name}</p>
@@ -240,10 +239,7 @@ export function AppHeader({
               )}
               {GROUPS.map((g) => (
                 <div key={g.key}>
-                  <p className="mb-1.5 flex items-center gap-2 px-3 text-xs font-black text-ocean-600">
-                    <g.icon className="h-4 w-4" />
-                    {g.label}
-                  </p>
+                  <p className="mb-1.5 px-3 text-xs font-black text-ocean-600">{g.label}</p>
                   <div className="space-y-0.5">
                     {g.items.map((item) => (
                       <Link
