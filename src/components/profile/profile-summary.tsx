@@ -190,29 +190,58 @@ export function ProfileSummary({
     <div className="space-y-6">
       {/* البطاقة الرئيسية */}
       <Card>
-        <div className="flex flex-wrap items-center gap-5">
-          <UserAvatar name={name} image={user.image} size="xl" />
-          <div className="min-w-0 flex-1">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-ocean-700 via-ocean-800 to-ocean-950 px-5 pb-16 pt-8 text-white">
+          <div className="absolute -left-10 -top-16 h-48 w-48 rounded-full bg-white/10 blur-2xl" />
+          <div className="absolute -right-6 -top-8 h-32 w-32 rounded-full bg-gold-300/20 blur-xl" />
+          <div className="relative flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-bold text-gold-300">{ROLES[user.role as keyof typeof ROLES] ?? user.role}</p>
+            {isOwn ? (
+              <Link href="/swimmer-profile" className="flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur transition-colors hover:bg-white/25">
+                <Pencil className="h-3.5 w-3.5" />
+                تعديل الملف
+              </Link>
+            ) : null}
+          </div>
+        </div>
+        <div className="-mt-14 flex flex-wrap items-end gap-5 px-5 pb-2">
+          <UserAvatar
+            name={name}
+            image={user.image}
+            size="xl"
+            className="h-24 w-24 rounded-full border-4 border-white shadow-lg ring-2 ring-ocean-100"
+          />
+          <div className="min-w-0 flex-1 pb-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-black text-ocean-900">{name}</h1>
-              <Badge color={user.role === 'admin' ? 'red' : 'ocean'}>{ROLES[user.role as keyof typeof ROLES] ?? user.role}</Badge>
+              <h1 className="truncate text-2xl font-black text-ocean-900">{name}</h1>
               {profile?.gender === 'male' ? <Badge color="slate">ذكر</Badge> : profile?.gender === 'female' ? <Badge color="gold">أنثى</Badge> : null}
               {profile?.ageGroup ? <Badge color="green">{AGE_GROUPS[profile.ageGroup as keyof typeof AGE_GROUPS] ?? profile.ageGroup}</Badge> : null}
               {profile?.medicalAlert ? <Badge color="red">يتطلب مراجعة طبية</Badge> : null}
             </div>
             <p className="mt-1 truncate text-sm text-slate-500" dir="ltr">{user.email}</p>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-              {profile?.country && <span>🌍 {profile.country}</span>}
-              {profile?.specialty && <span>🏊 {SPECIALTIES[profile.specialty as keyof typeof SPECIALTIES] ?? profile.specialty}</span>}
-              <span>📅 انضم {formatDate(user.createdAt)}</span>
-            </div>
           </div>
-          {isOwn && (
-            <Link href="/swimmer-profile" className="btn-secondary">
-              <Pencil className="h-4 w-4" />
-              تعديل الملف
-            </Link>
-          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 px-5 py-4 sm:grid-cols-4">
+          <div className="rounded-xl bg-ocean-50/70 p-3 text-center">
+            <p className="text-xs font-semibold text-slate-400">العمر</p>
+            <p className="mt-1 text-base font-black text-ocean-900">{age !== null ? `${age} سنة` : '—'}</p>
+          </div>
+          <div className="rounded-xl bg-ocean-50/70 p-3 text-center">
+            <p className="text-xs font-semibold text-slate-400">الطول</p>
+            <p className="mt-1 text-base font-black text-ocean-900">{profile?.heightCm ? `${formatNumber(profile.heightCm)} سم` : '—'}</p>
+          </div>
+          <div className="rounded-xl bg-ocean-50/70 p-3 text-center">
+            <p className="text-xs font-semibold text-slate-400">الوزن</p>
+            <p className="mt-1 text-base font-black text-ocean-900">{profile?.weightKg ? `${formatNumber(profile.weightKg)} كجم` : '—'}</p>
+          </div>
+          <div className="rounded-xl bg-ocean-50/70 p-3 text-center">
+            <p className="text-xs font-semibold text-slate-400">البطولة القادمة</p>
+            <p className="mt-1 text-base font-black text-ocean-900">{profile?.nextCompetitionDate ? formatDate(profile.nextCompetitionDate) : '—'}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 pb-5 text-xs text-slate-500">
+          {profile?.country && <span>🌍 {profile.country}</span>}
+          {profile?.specialty && <span>🏊 {SPECIALTIES[profile.specialty as keyof typeof SPECIALTIES] ?? profile.specialty}</span>}
+          <span>📅 انضم {formatDate(user.createdAt)}</span>
         </div>
       </Card>
 
