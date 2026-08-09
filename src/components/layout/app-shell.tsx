@@ -149,7 +149,7 @@ export function AppShell({
           <button onClick={() => setSidebarOpen(true)} className="rounded-lg p-2 text-ocean-900 hover:bg-ocean-50 lg:hidden" aria-label="فتح القائمة">
             <Menu className="h-6 w-6" />
           </button>
-          <nav className="hidden items-center gap-1 md:flex" aria-label="التنقل الرئيسي">
+          <nav className="flex items-center gap-1" aria-label="التنقل الرئيسي">
             {HEADER_GROUPS.map((g) => {
               const isOpen = openMenu === g.key;
               const isActive = g.items.some((i) => pathname === i.href || pathname.startsWith(i.href + '/'));
@@ -159,12 +159,12 @@ export function AppShell({
                     onClick={() => setOpenMenu(isOpen ? null : g.key)}
                     onMouseEnter={() => setOpenMenu(g.key)}
                     className={cn(
-                      'flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold transition-colors',
+                      'flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-bold transition-colors lg:px-3',
                       isActive ? 'bg-ocean-600 text-white shadow-md' : 'text-slate-600 hover:bg-ocean-50 hover:text-ocean-700'
                     )}
                   >
-                    <g.icon className="h-4 w-4" />
-                    {g.label}
+                    <g.icon className="h-4 w-4 shrink-0" />
+                    <span className="hidden md:inline">{g.label}</span>
                     <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', isOpen && 'rotate-180')} />
                   </button>
                   {isOpen && (
@@ -196,18 +196,18 @@ export function AppShell({
           </nav>
           <Logo variant="dark" />
         </div>
-        <div className="flex items-center gap-3">
-          <span className="hidden text-sm font-bold text-slate-700 md:block">{pageTitle}</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="truncate text-sm font-bold text-slate-700">{pageTitle}</span>
           <span className="hidden rounded-full bg-ocean-50 px-3 py-1 text-xs font-bold text-ocean-700 sm:block">
             {ROLES[user.role as keyof typeof ROLES] ?? user.role}
           </span>
-          <div className="flex items-center gap-2">
+          <Link href="/swimmer-profile" className="flex items-center gap-2" aria-label="ملف بيانات السباح">
             <UserAvatar name={user.name} image={user.image} size="md" />
             <div className="hidden sm:block">
               <p className="text-sm font-bold text-slate-800">{user.name}</p>
               <p className="text-xs text-slate-400">{user.email}</p>
             </div>
-          </div>
+          </Link>
         </div>
       </header>
 
