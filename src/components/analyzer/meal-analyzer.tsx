@@ -1,5 +1,56 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/analyzer/meal-analyzer.tsx
+
+وظيفة الملف:
+المكوّن التفاعلي "محلل الوجبات الذكي" — قلب صفحة تحليل الوجبات.
+يقوم بـ:
+1. فتح الكاميرا أو رفع صورة.
+2. ضغط الصورة في المتصفح (حتى لا يتجاوز حجم الطلب).
+3. إرسالها لواجهة /api/analyze-meal (الذكاء الاصطناعي).
+4. عرض النتائج مع إمكانية تعديل كل صنف (اسم، سعرات، جرامات).
+5. مقارنة النتائج بالهدف اليومي للمستخدم.
+6. إضافة الوجبة للسجل اليومي.
+
+لماذا نحتاجه؟
+التقاط الصورة وضغطها وتعديل النتائج كلها أشياء تفاعلية
+لا يمكن أن تعمل في الخادم — يجب أن تعمل في المتصفح.
+
+'use client':
+أول سطر يخبر Next.js أن هذا المكون يعمل في المتصفح
+(لأنه يستخدم navigator.mediaDevices والكاميرا وfetch...).
+
+متى يعمل؟
+عند فتح صفحة /meal-analyzer (يستدعيه Server Page).
+
+العلاقة مع الملفات:
+- الأب: src/app/meal-analyzer/page.tsx (يمرر له targets).
+- API: /api/analyze-meal (تحليل الصورة) و /api/logs (إضافة للسجل).
+- مكتبات: react hooks (useState/useEffect/useRef) + lucide أيقونات.
+
+State (الحالة) — أهم فكرة في React:
+هذه المتغيرات تُحدَّث بـ setX وتتسبب في إعادة رسم الواجهة:
+- photo: الصورة الحالية (نص Data URL).
+- result / edited: نتيجة التحليل (الأصلية / المعدلة).
+- cameraOn / cameraReady: حالة الكاميرا.
+- analyzing: هل الطلب للذكاء الاصطناعي قيد التنفيذ؟
+- consent: موافقة المستخدم على حفظ الصورة.
+- added: هل أُضيفت الوجبة للسجل؟
+==================================================
+*/
+
 'use client';
 
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// useEffect: تنفيذ كود بعد العرض. useRef: مرجع لعنصر HTML
+// (بدون إعادة رسم). useState: حفظ حالة متغيرة.
 import { useEffect, useRef, useState } from 'react';
 import {
   Camera,
@@ -19,18 +70,44 @@ import { ANALYZE_DISCLAIMER } from '@/services/ai';
 import type { MealAnalysisResult } from '@/types';
 import { formatNumber } from '@/lib/utils';
 
+// ========================================
+// 2. المكوّن الرئيسي
+// ========================================
+
+/*
+-----------------------------------------
+المكوّن: MealAnalyzer
+-----------------------------------------
+Props:
+- targets: أهداف المستخدم الغذائية (سعرات، بروتين...)
+  قادمة من الصفحة الأب (من قاعدة البيانات).
+
+ترتيب التنفيذ (قصة كاملة):
+1. المستخدم يفتح الصفحة → نرى حالة "لا صورة".
+2. يضغط "تشغيل الكاميرا" → startCamera().
+3. يلتقط صورة → capture() → ضغطها → photo.
+4. يضغط "تحليل الوجبة" → analyze() → API → result.
+5. يعدّل النتائج → updateFood() يعيد الحساب.
+6. يضغط "إضافة للسجل" → addToLog() → /api/logs.
+-----------------------------------------
+*/
 export function MealAnalyzer({
   targets,
 }: {
   targets: { calories?: number | null; proteinG?: number | null; carbsG?: number | null; fatG?: number | null } | null;
 }) {
+  // useRef: مراجع مباشرة لعناصر HTML (فيديو الكاميرا، حقل الرفع).
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const captureInputRef = useRef<HTMLInputElement>(null);
+
+  // ===== State: حالة الكاميرا =====
   const [cameraOn, setCameraOn] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraRequesting, setCameraRequesting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+
+  // ===== State: الصورة والتحليل =====
   const [photo, setPhoto] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<MealAnalysisResult | null>(null);
@@ -39,22 +116,45 @@ export function MealAnalyzer({
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
 
+  // عند مغادرة الصفحة (إزالة المكون) → نغلق الكاميرا
+  // حتى لا تبقى تعمل في الخلفية. الدالة المعادة هي "التنظيف".
   useEffect(() => {
     return () => stopCamera();
   }, []);
 
+  // ========================================
+  // 3. دوال الكاميرا
+  // ========================================
+
+  /*
+  -----------------------------------------
+  الدالة: getMediaWithTimeout
+  -----------------------------------------
+  وضيفتها: فتح الكاميرا مع مهلة زمنية (15 ثانية).
+  Input: constraints (مواصفات الكاميرا) + ms (المهلة).
+  Output: Promise<MediaStream> — تيار الفيديو.
+
+  ما هو Promise؟
+  وعد — يمثل نتيجة ستصل لاحقًا (مثل إذن الكاميرا).
+  نديرها يدويًا هنا لأن getUserMedia لا يقبل مهلة زمنية.
+  -----------------------------------------
+  */
   function getMediaWithTimeout(constraints: MediaStreamConstraints, ms: number) {
     return new Promise<MediaStream>((resolve, reject) => {
+      // setTimeout: نبدأ مؤقتًا — لو انتهى قبل وصول الكاميرا نرفض الوعد.
       const t = setTimeout(
         () => reject(new DOMException('استغرقت عملية فتح الكاميرا وقتًا طويلًا', 'TimeoutError')),
         ms
       );
+      // نطلب إذن الكاميرا من المتصفح.
       navigator.mediaDevices.getUserMedia(constraints).then(
         (s) => {
+          // النجاح: نلغي المؤقت ونحل الوعد مع تيار الفيديو.
           clearTimeout(t);
           resolve(s);
         },
         (e) => {
+          // الفشل: نلغي المؤقت ونرفض الوعد بالخطأ.
           clearTimeout(t);
           reject(e);
         }
@@ -62,11 +162,25 @@ export function MealAnalyzer({
     });
   }
 
+  /*
+  -----------------------------------------
+  الدالة: startCamera
+  -----------------------------------------
+  وظيفتها: فتح الكاميرا (الخلفية أولًا ثم أي كاميرا).
+  ترتيب التنفيذ:
+  1. نفحص هل المتصفح يدعم الكاميرا.
+  2. نجرب الكاميرا الخلفية (environment) — مثالية لتصوير الطعام.
+  3. لو فشلت → نفتح أي كاميرا افتراضية.
+  4. نربط تيار الفيديو بعنصر <video> في الواجهة.
+  5. نعالج أخطاء الإذن/الجهاز برسائل واضحة.
+  -----------------------------------------
+  */
   async function startCamera() {
     setCameraError(null);
     setCameraReady(false);
     setCameraRequesting(true);
     try {
+      // بعض المتصفحات لا تدعم الكاميرا (غير HTTPS).
       if (!navigator.mediaDevices?.getUserMedia) {
         setCameraError('المتصفح لا يدعم الكاميرا على هذا الرابط. استخدم HTTPS أو localhost.');
         return;
@@ -89,17 +203,22 @@ export function MealAnalyzer({
         // الكاميرا الخلفية غير متاحة (كمبيوتر/بعض الأجهزة) — استخدم أي كاميرا افتراضية
         stream = await getMediaWithTimeout({ video: true, audio: false }, 15000);
       }
+      // نخزّن التيار حتى نستطيع إغلاقه لاحقًا.
       streamRef.current = stream;
       const video = videoRef.current;
       if (!video) {
         stopCamera();
         return;
       }
+      // نربط تيار الكاميرا بعنصر الفيديو في الصفحة.
       video.srcObject = stream;
+      // playsinline + muted: إعدادات تمنع الكاميرا من الفتح في وضع ملء الشاشة.
       video.setAttribute('playsinline', 'true');
       video.muted = true;
+      // نشغّل الفيديو (await لأن التشغيل عملية غير متزامنة).
       await video.play();
     } catch (err) {
+      // نقرأ اسم الخطأ (مثل NotAllowedError) لنعرض رسالة مناسبة.
       const name = err instanceof DOMException ? err.name : '';
       if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
         setCameraError('رُفض إذن الكاميرا. اضغط أيقونة القفل في شريط العنوان ثم اسمح بالكاميرا وحاول مجددًا.');
@@ -114,10 +233,12 @@ export function MealAnalyzer({
       }
       stopCamera();
     } finally {
+      // تنفَّذ دائمًا (نجاحًا أو فشلًا): ننهي حالة "جارٍ الطلب".
       setCameraRequesting(false);
     }
   }
 
+  // stopCamera: إغلاق كل مسارات الكاميرا وتنظيف الحالة.
   function stopCamera() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -126,16 +247,35 @@ export function MealAnalyzer({
   }
 
   // ضغط الصورة في المتصفح حتى لا يتجاوز حجم الطلب حد الخادم (يحدث خطأ JSON عند تجاوزه)
+  // ========================================
+  // 4. ضغط الصورة
+  // ========================================
+
+  /*
+  -----------------------------------------
+  الدالة: compressImage
+  -----------------------------------------
+  وظيفتها: تصغير الصورة وجودتها في المتصفح.
+  Input: dataUrl (الصورة) + maxDim + quality.
+  Output: Promise<string> (الصورة المضغوطة).
+  لماذا؟ الصور من الكاميرا كبيرة جدًا — لو أرسلناها كما هي
+  سيرفض الخادم الطلب (تجاوز حد حجم JSON).
+  -----------------------------------------
+  */
   function compressImage(dataUrl: string, maxDim = 1280, quality = 0.78): Promise<string> {
     return new Promise((resolve) => {
+      // Image: كائن صورة يعمل في المتصفح.
       const img = new Image();
       img.onload = () => {
+        // نقرأ أبعاد الصورة الأصلية.
         let { width, height } = img;
+        // لو أكبر من الحد → نحسب مقياس تصغير يحافظ على النسبة.
         if (width > maxDim || height > maxDim) {
           const scale = maxDim / Math.max(width, height);
           width = Math.round(width * scale);
           height = Math.round(height * scale);
         }
+        // canvas: "لوحة رسم" نعيد رسم الصورة عليها بمقاس أصغر.
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
@@ -145,6 +285,7 @@ export function MealAnalyzer({
           return;
         }
         ctx.drawImage(img, 0, 0, width, height);
+        // toDataURL: نحول اللوحة لنص Data URL بصيغة JPEG وجودة أقل.
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = () => resolve(dataUrl);
@@ -152,6 +293,22 @@ export function MealAnalyzer({
     });
   }
 
+  // ========================================
+  // 5. الالتقاط والرفع
+  // ========================================
+
+  /*
+  -----------------------------------------
+  الدالة: capture
+  -----------------------------------------
+  وظيفتها: أخذ لقطة من الفيديو وتحويلها لصورة.
+  ترتيب التنفيذ:
+  1. نتحقق أن الفيديو يعرض إطارًا (readyState).
+  2. نرسم إطار الفيديو الحالي على canvas.
+  3. نضغط الصورة ونحفظها في photo.
+  4. نغلق الكاميرا وننظف النتائج السابقة.
+  -----------------------------------------
+  */
   async function capture() {
     const video = videoRef.current;
     if (!video) return;
@@ -164,6 +321,7 @@ export function MealAnalyzer({
     canvas.height = video.videoHeight || 720;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    // نرسم الإطار الحالي من الفيديو على اللوحة.
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     setPhoto(await compressImage(canvas.toDataURL('image/jpeg', 0.85)));
     stopCamera();
@@ -172,9 +330,11 @@ export function MealAnalyzer({
     setAdded(false);
   }
 
+  // onUpload: رفع صورة من الجهاز (أو "التقاط بالكاميرا" للجوال).
   function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    // FileReader: يقرأ الملف كبيانات قابلة للعرض.
     const reader = new FileReader();
     reader.onload = async () => {
       setPhoto(await compressImage(String(reader.result)));
@@ -182,9 +342,11 @@ export function MealAnalyzer({
       setEdited(null);
       setAdded(false);
     };
+    // readAsDataURL: يقرأ الصورة كـ Data URL (نصي).
     reader.readAsDataURL(file);
   }
 
+  // resetAll: مسح كل شيء (صورة، نتائج، أخطاء) للبدء من جديد.
   function resetAll() {
     setPhoto(null);
     setResult(null);
@@ -193,6 +355,25 @@ export function MealAnalyzer({
     setAdded(false);
   }
 
+  // ========================================
+  // 6. التحليل بالذكاء الاصطناعي
+  // ========================================
+
+  /*
+  -----------------------------------------
+  الدالة: analyze
+  -----------------------------------------
+  وظيفتها: إرسال الصورة لواجهة /api/analyze-meal.
+  ترتيب التنفيذ:
+  1. fetch (طلب POST) — نرسل الصورة + الموافقة.
+  2. نحول الرد لـ JSON.
+  3. لو الرد فشل → نعرض رسالة الخطأ.
+  4. لو نجح → نحفظ النتيجة (result + edited للتحرير).
+  5. finally: ننهي حالة التحليل دائمًا.
+
+  fetch: دالة المتصفح لإرسال طلبات الشبكة (GET/POST...).
+  -----------------------------------------
+  */
   async function analyze() {
     if (!photo) return;
     setAnalyzing(true);
@@ -219,14 +400,23 @@ export function MealAnalyzer({
     }
   }
 
+  // ========================================
+  // 7. تعديل النتائج وإعادة الحساب
+  // ========================================
+
+  // updateFood: تعديل حقل واحد في صنف طعام معين.
   function updateFood(i: number, field: string, value: string | number) {
     if (!edited) return;
+    // نسخة جديدة من المصفوفة (لا نعدل الأصل مباشرة — قاعدة React).
     const foods = [...edited.foods];
+    // نقوم بتحديث الحقل في العنصر i (نسخة جديدة من الكائن).
     foods[i] = { ...foods[i], [field]: value };
+    // نعيد حساب المجاميع بعد التعديل.
     const totals = recompute(foods);
     setEdited({ ...edited, foods, ...totals });
   }
 
+  // recompute: إعادة حساب مجاميع الوجبة (سعرات، بروتين...) من الأصناف.
   function recompute(foods: MealAnalysisResult['foods']) {
     return {
       totalCalories: Math.round(foods.reduce((a, f) => a + (f.calories ?? 0), 0)),
@@ -236,6 +426,11 @@ export function MealAnalyzer({
     };
   }
 
+  // ========================================
+  // 8. إضافة الوجبة للسجل اليومي
+  // ========================================
+
+  // addToLog: حفظ الوجبة المحللة في سجل الطعام اليومي.
   async function addToLog() {
     if (!edited) return;
     const res = await fetch('/api/logs', {
@@ -250,19 +445,23 @@ export function MealAnalyzer({
         fatG: edited.totalFatG,
         fiberG: edited.totalFiberG,
         sodiumMg: edited.totalSodiumMg,
-        source: 'analysis',
+        source: 'analysis', // نعلّم أن مصدر السجل هو تحليل بالكاميرا
       }),
     });
     if (res.ok) {
-      setAdded(true);
+      setAdded(true); // نعرض "أُضيفت للسجل ✓"
     } else {
       const data = await res.json();
       setError(data.error ?? 'تعذر الإضافة للسجل');
     }
   }
 
+  // السعرات المتبقية من الهدف اليومي (قد تكون سالبة لو تجاوزنا).
   const remaining = (targets?.calories ?? 2200) - (edited?.totalCalories ?? 0);
 
+  // ========================================
+  // 9. الواجهة (JSX)
+  // ========================================
   return (
     <div>
       <div className="mb-6">

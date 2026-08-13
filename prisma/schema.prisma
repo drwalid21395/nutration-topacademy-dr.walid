@@ -4,10 +4,54 @@
 // للتبديل إلى PostgreSQL استخدم: npm run db:postgres
 // ============================================================
 
+// ============================================================
+// شرح الملف للمبتدئ
+// ============================================================
+// اسم الملف:
+// prisma/schema.prisma
+//
+// وظيفة الملف:
+// "مخطط قاعدة البيانات" — يصف شكل الجداول والعلاقات بينها.
+// كل model هنا = جدول في قاعدة البيانات.
+// كل سطر داخل model = عمود (حقل) في الجدول.
+//
+// لماذا نحتاجه؟
+// هذا هو "المصدر الوحيد للحقيقة" لشكل البيانات. من هذا الملف
+// تولّد Prisma الكود (أمر: prisma generate) الذي نستخدمه
+// في src/lib/prisma.ts للقراءة والكتابة.
+//
+// ما الفرق بين SQLite و PostgreSQL؟
+// - SQLite: ملف محلي بسيط (prisma/dev.db) — للتجربة السريعة.
+// - PostgreSQL: خادم قواعد بيانات قوي — للإنتاج (Neon على Vercel).
+// هناك نسختان من الملف (schema.prisma و schema.postgres.prisma)
+// يتم التبديل بينهما بـ scripts/use-db.js (انظر AGENTS.md).
+//
+// ترتيب التنفيذ (كيف تُستخدم):
+// 1. نعرّف النموذج هنا (model User {...}).
+// 2. نشغّل prisma generate → يولد PrismaClient.
+// 3. في الكود: prisma.user.findMany() / create() / update()...
+// 4. ما تعريف الجدول فعلًا؟ أمر prisma db push أو migrate
+//    (تحذير: لا تنفذه على الإنتاج إلا بطلب صريح — راجع AGENTS.md).
+//
+// كيف أقرأ السطور؟
+// - @id: هذا الحقل هو المعرف الفريد.
+// - @default(cuid()): قيمة تلقائية فريدة عند الإنشاء.
+// - @unique: لا يسمح بتكرار القيمة (مثل البريد).
+// - ?: الحقل اختياري (يمكن أن يكون null).
+// - @relation(...): ربط بين جدولين.
+// - العلاقات: profiles SwimmerProfile[] تعني "مستخدم له ملفات كثيرة".
+//
+// الأهم للمبتدئ: اقرأ نماذج User وSwimmerProfile وNutritionTargets
+// وMealPlan أولًا — هي قلب المشروع.
+// ============================================================
+
 generator client {
   provider = "prisma-client-js"
 }
 
+// datasource: تحديد نوع قاعدة البيانات ومكان الاتصال.
+// env("DATABASE_URL"): يأخذ الرابط من ملف .env
+// (ملف محلي غير مرفوع لـ git — فيه أسرار!).
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
@@ -15,13 +59,14 @@ datasource db {
 
 // ---------------- المستخدمون والأدوار ----------------
 
+// model User: جدول المستخدمين — كل من سجل حسابًا في الموقع.
 model User {
   id            String   @id @default(cuid())
   name          String
-  email         String   @unique
-  emailVerified DateTime?
+  email         String   @unique // بريد فريد — لا يتكرر
+  emailVerified DateTime? // متى تحقق من بريده (اختياري)
   phone         String?
-  passwordHash  String
+  passwordHash  String // كلمة المرور مشفرة (هاش) — لا نص خام
   image         String?
   role          String   @default("athlete") // athlete | guardian | coach | dietitian | admin
   status        String   @default("active") // active | suspended | deleted
@@ -33,11 +78,13 @@ model User {
   acceptTerms   Boolean  @default(false)
   acceptPrivacy Boolean  @default(false)
   lastLoginAt   DateTime?
-  resetToken    String?
+  resetToken    String? // رمز استعادة كلمة المرور
   resetTokenExp DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now()) // وقت الإنشاء
+  updatedAt     DateTime @updatedAt // يتحدث تلقائيًا عند التعديل
 
+  // ===== العلاقات: حقول "افتراضية" لا تُخزَّن — تصف الروابط =====
+  // User واحد له عدة ملفات/خطط/سجلات... (علاقة 1-إلى-كثير)
   profiles       SwimmerProfile[]
   mealPlans      MealPlan[]
   foodLogs       FoodLogEntry[]
@@ -73,9 +120,13 @@ model User {
 
 // ---------------- ملف السباح ----------------
 
+// model SwimmerProfile: بيانات السباح الغذائية والتدريبية
+// (مستخدم واحد له ملف واحد). يستخدمها الحاسب والخطط.
 model SwimmerProfile {
   id          String  @id @default(cuid())
-  userId      String
+  userId      String // المعرف الرابط للمستخدم
+  // user: الربط الفعلي — user_id يحيل لجدول User.
+  // onDelete: Cascade = لو حُذف المستخدم يُحذف ملفه تلقائيًا.
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // بيانات أساسية
@@ -139,26 +190,31 @@ model SwimmerProfile {
 
 // ---------------- نتائج الحسابات الغذائية ----------------
 
+// model NutritionTargets: ناتج حاسبة الاحتياج الغذائي لكل سباح.
+// يخزن "الأرقام المستهدفة" التي تعتمد عليها الخطط:
+// السعرات، البروتين، الكربوهيدرات، الدهون، الماء...
+// كل سجل مرتبط بملف سباح واحد (profileId).
+// لا يُكتب يدويًا — تُنتجه دالة الحساب تلقائيًا.
 model NutritionTargets {
   id             String  @id @default(cuid())
-  profileId      String
+  profileId      String // رابط لملف السباح
   profile        SwimmerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  bmi            Float?
+  bmi            Float? // مؤشر كتلة الجسم (BMI)
   bmiCategory    String?
-  bmr            Float?
-  tdee           Float?
+  bmr            Float? // معدل الأيض الأساسي (سعرات الراحة)
+  tdee           Float? // إجمالي استهلاك الطاقة اليومي
   calories       Float? // السعرات المستهدفة
   calorieMin     Float? // نطاق آمن
   calorieMax     Float?
-  proteinG       Float?
-  carbsG         Float?
-  fatG           Float?
-  fiberG         Float?
+  proteinG       Float? // البروتين بالجرام يوميًا
+  carbsG         Float? // الكربوهيدرات بالجرام
+  fatG           Float? // الدهون بالجرام
+  fiberG         Float? // الألياف
   waterMl        Float? // احتياج الماء اليومي
   trainingWaterMl Float? // إضافي أثناء التمرين
-  sodiumMg       Float?
-  proteinPct     Float?
+  sodiumMg       Float? // الصوديوم
+  proteinPct     Float? // نسب التوزيع %
   carbsPct       Float?
   fatPct         Float?
   mealCalories   String? // توزيع السعرات على الوجبات (JSON)
@@ -167,7 +223,7 @@ model NutritionTargets {
   recommendations String? // توصيات أيام التدريب/الراحة/البطولة (JSON)
   createdAt      DateTime @default(now())
 
-  mealPlans MealPlan[]
+  mealPlans MealPlan[] // الخطط المبنية على هذه النتائج
 }
 
 // ---------------- قاعدة بيانات الطعام ----------------
@@ -218,35 +274,39 @@ model FoodItem {
 
 // ---------------- الخطط الغذائية ----------------
 
+// model MealPlan: الخطة الغذائية الأسبوعية/اليومية التي تُولّد
+// لكل سباح بناءً على NutritionTargets. تحتوي على وجبات (Meal).
+// نفس المستخدم قد يملك عدة خطط (تعديلات أو خطط منافسة) —
+// isActive يحدد الخطة المعتمدة حاليًا.
 model MealPlan {
   id            String  @id @default(cuid())
-  userId        String
+  userId        String // مالك الخطة (السباح)
   user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profileId     String?
+  profileId     String? // ملف السباح المستخدم في التوليد
   profile       SwimmerProfile? @relation(fields: [profileId], references: [id])
-  competitionId String? @unique
+  competitionId String? @unique // إن كانت خطة بطولة
   competition   Competition? @relation(fields: [competitionId], references: [id])
-  targetsId     String?
+  targetsId     String? // نتائج الحساب المعتمدة
   targets       NutritionTargets? @relation(fields: [targetsId], references: [id])
   title         String
-  durationDays  Int     @default(7)
+  durationDays  Int     @default(7) // مدة الخطة بالأيام
   planType      String? // daily | threeDays | week | twoWeeks | thirtyDays | competitionPrep | competitionDay | postCompetition
   goal          String?
-  totalCalories Float?
+  totalCalories Float? // إجماليات الخطة
   proteinG      Float?
   carbsG        Float?
   fatG          Float?
   waterMl       Float?
-  mealsPerDay   Int     @default(5)
-  isCompetitionMode Boolean @default(false)
-  isActive      Boolean @default(false)
-  version       Int     @default(1)
+  mealsPerDay   Int     @default(5) // عدد الوجبات يوميًا
+  isCompetitionMode Boolean @default(false) // وضع البطولة
+  isActive      Boolean @default(false) // الخطة المعتمدة الحالية
+  version       Int     @default(1) // رقم إصدار الخطة
   generatedWith String? // formula version
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  meals     Meal[]
-  reports   Report[]
+  meals     Meal[] // وجبات الخطة
+  reports   Report[] // التقارير المولدة منها
 }
 
 model Meal {

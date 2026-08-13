@@ -1,4 +1,45 @@
-import { redirect } from 'next/navigation';
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/app/dashboard/page.tsx
+
+وظيفة الملف:
+لوحة تحكم المستخدم (المسار /dashboard) — أول صفحة بعد تسجيل
+الدخول. تعرض: بطاقات التقدم (سعرات/ماء/بروتين/تمرين)،
+التغذية الديناميكية اليوم، الخطة الحالية، ملخص اليوم،
+الوزن، الإشعارات، وإجراءات سريعة.
+
+نوعها: Server Component (بدون 'use client').
+تعمل في الخادم وتقرأ قاعدة البيانات مباشرة قبل إرسال الصفحة.
+
+ترتيب التنفيذ (من الأعلى):
+1. getCurrentUser() → لو غير مسجل redirect('/login').
+2. جلب كل بيانات اليوم من قاعدة البيانات (بالتوازي via Promise.all).
+3. حساب مجموعات (سعرات، بروتين، ماء...) من السجلات.
+4. حساب "الوجبة القادمة" حسب الوقت.
+5. عرض كل شيء داخل AppShell.
+
+لماذا Promise.all؟
+نقرأ عدة جداول (طعام، ماء، تمرين، نوم، وزن، إشعارات، خطط)
+في نفس الوقت بدل تسلسليًا — أسرع كثيرًا.
+
+العلاقة مع الملفات:
+- AppShell (القائمة الجانبية).
+- getCurrentUser من lib/auth.
+- prisma من lib/prisma (قراءة قاعدة البيانات).
+- getTodayState من lib/nutrition/dynamic (الهدف الديناميكي).
+- مكونات UI من components/ui.
+==================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+import { redirect } from 'next/navigation'; // تحويل لصفحة أخرى
 import Link from 'next/link';
 import {
   Flame,
@@ -26,8 +67,14 @@ import { formatNumber, startOfToday, formatDate, cn } from '@/lib/utils';
 import { getTodayState } from '@/lib/nutrition/dynamic';
 import { AutoSync } from '@/components/wearables/auto-sync';
 
+// ========================================
+// 2. بيانات التعريف
+// ========================================
+
+// metadata: عنوان الصفحة في تبويب المتصفح (مع template في layout).
 export const metadata = { title: 'لوحة التحكم' };
 
+// LOAD_AR: تحويل كلمة "تحميل التدريب" من الإنجليزية للمفتاح إلى العربية.
 const LOAD_AR: Record<string, string> = {
   rest: 'راحة',
   light: 'خفيف',
@@ -36,24 +83,51 @@ const LOAD_AR: Record<string, string> = {
   veryHigh: 'مرتفع جدًا',
 };
 
+// ========================================
+// 3. الصفحة الرئيسية (تعمل في الخادم)
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: DashboardPage
+-----------------------------------------
+متى تعمل؟ عند فتح /dashboard (بعد تسجيل الدخول).
+خطواتها (قصة البيانات):
+1. من المستخدم؟ لو لا أحد → إلى صفحة الدخول.
+2. نجلب ملف السباح + الخطة النشطة + آخر نتائج الحساب.
+3. نجلب سجلات اليوم: طعام، ماء، تمرين، نوم، وزن، إشعارات.
+4. نجمع السعرات والبروتين... من سجلات الطعام.
+5. نحدد الوجبة القادمة حسب الساعة.
+6. نقرأ الهدف الديناميكي (يتغير مع نشاط الساعة).
+7. نرسم كل شيء داخل الواجهة.
+-----------------------------------------
+*/
 export default async function DashboardPage() {
+  // الخطوة 1: من هو المستخدم؟ لو غير مسجل → ننقله لصفحة الدخول.
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
+  // الخطوة 2: قراءة البيانات الأساسية بالتوازي.
+  // Promise.all: تشغيل عدة عمليات "غير متزامنة" معًا (أسرع من التسلسل).
   const [profile, activePlan, latestTargets, todayStart] = await Promise.all([
+    // ملف السباح الخاص بالمستخدم (أو null لو لم يُدخل بعد).
     prisma.swimmerProfile.findFirst({ where: { userId: user.id } }),
+    // الخطة الغذائية النشطة + وجباتها + عناصرها (مرتبة بالأيام).
     prisma.mealPlan.findFirst({
       where: { userId: user.id, isActive: true },
       orderBy: { updatedAt: 'desc' },
       include: { meals: { include: { items: true }, orderBy: { dayNumber: 'asc' } } },
     }),
+    // آخر نتائج حساب الاحتياجات الغذائية.
     prisma.nutritionTargets.findFirst({
       where: { profile: { userId: user.id } },
       orderBy: { createdAt: 'desc' },
     }),
+    // تاريخ اليوم في بداية اليوم (للمقارنة).
     startOfToday(),
   ]);
 
+  // الخطوة 3: سجلات اليوم من ستة جداول في وقت واحد.
   const [foodLogs, waterLogs, trainingLogs, recoveryLog, weightLogs, notifications, planCount] =
     await Promise.all([
       prisma.foodLogEntry.findMany({
@@ -73,7 +147,7 @@ export default async function DashboardPage() {
       prisma.weightLogEntry.findMany({
         where: { userId: user.id },
         orderBy: { date: 'asc' },
-        take: 14,
+        take: 14, // آخر 14 سجل وزن للرسم البياني
       }),
       prisma.notification.findMany({
         where: { userId: user.id, isRead: false },
@@ -83,23 +157,29 @@ export default async function DashboardPage() {
       prisma.mealPlan.count({ where: { userId: user.id } }),
     ]);
 
+  // الخطوة 4: تجميع مجموعات اليوم.
+  // reduce: يمر على كل عنصر ويجمع القيم — هنا نجمع السعرات.
+  // (a = المجموع التراكمي، f = العنصر الحالي).
   const eatenCals = foodLogs.reduce((a, f) => a + (f.calories ?? 0), 0);
   const eatenProtein = foodLogs.reduce((a, f) => a + (f.proteinG ?? 0), 0);
   const eatenCarbs = foodLogs.reduce((a, f) => a + (f.carbsG ?? 0), 0);
   const eatenFat = foodLogs.reduce((a, f) => a + (f.fatG ?? 0), 0);
   const waterMl = waterLogs.reduce((a, w) => a + w.amountMl, 0);
 
+  // القيم الهدف (من آخر حساب أو قيم افتراضية لو لا يوجد حساب بعد).
   const targetCals = latestTargets?.calories ?? 2200;
   const targetProtein = latestTargets?.proteinG ?? 120;
   const targetWater = latestTargets?.waterMl ?? 2800;
 
-  // الوجبة القادمة حسب الوقت
+  // الخطوة 5: تحديد الوجبة القادمة حسب ساعة اليوم.
+  // getHours(): الساعة الحالية (0-23). كل فترة زمنية = وجبة معينة.
   const nowHour = new Date().getHours();
+  // نأخذ وجبات اليوم الأول من الخطة.
   const currentDay = activePlan?.meals?.filter((m) => m.dayNumber === 1) ?? [];
   const mealTypeNow = nowHour < 10 ? 'breakfast' : nowHour < 12 ? 'snack1' : nowHour < 15 ? 'lunch' : nowHour < 18 ? 'snack2' : 'dinner';
   const nextMeal = currentDay.find((m) => m.mealType === mealTypeNow) ?? currentDay[0];
 
-  // مقارنة خطة اليوم بما سُجّل فعلًا (حسب نوع الوجبة)
+  // الخطوة 6: مقارنة خطة اليوم بما سُجّل فعلًا (حسب نوع الوجبة).
   const planComparison = currentDay.map((m) => {
     const logged = foodLogs.filter((f) => f.mealType === m.mealType);
     const eaten = logged.reduce((a, f) => a + (f.calories ?? 0), 0);
@@ -110,18 +190,23 @@ export default async function DashboardPage() {
       plannedCalories: m.calories ?? 0,
     };
   });
+  // مجموع السعرات المخطط والمستهلك من الخطة.
   const planCaloriesTarget = currentDay.reduce((a, m) => a + (m.calories ?? 0), 0);
   const planCaloriesEaten = planComparison.reduce((a, c) => a + (c.eatenCalories), 0);
   const planMealsDone = planComparison.filter((c) => c.logged).length;
 
+  // هل أدخل المستخدم بياناته بعد؟
   const hasProfile = !!profile;
 
-  // المحرك الديناميكي: هدف اليوم القابل للتعديل حسب النشاط.
+  // الخطوة 7: المحرك الديناميكي — الهدف يعدل حسب نشاط الساعة والتدريب.
   const todayState = await getTodayState(user.id);
   const dynamicTarget = todayState.dynamic?.adjustedCalories ?? targetCals;
   const dynamicWater = todayState.dynamic?.waterMl ?? targetWater;
   const dynamicProtein = todayState.dynamic?.proteinG ?? targetProtein;
 
+  // ========================================
+  // 4. عرض الواجهة (JSX)
+  // ========================================
   return (
     <AppShell user={user}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">

@@ -1,4 +1,39 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/lib/constants.ts
+
+وظيفة الملف:
+مكان واحد يحتوي كل "الثوابت" — القيم التي لا تتغير
+طوال عمر الموقع: اسم الأكاديمية، اسم الدكتور، الأدوار،
+أسماء الوجبات، الأهداف، نصوص التنبيهات القانونية...
+
+لماذا نحتاجه؟
+تخيّل أن اسم الدكتور مكتوب في 50 صفحة. لو تغيّر اسمه يومًا،
+سنغيّر من هنا فقط وسيتغير في كل الموقع تلقائيًا.
+هذا مبدأ يسمى "مصدر واحد للحقيقة".
+
+من يستخدمه؟
+كل الصفحات والمكونات تقريبًا تستورد منه:
+- الصفحة الرئيسية: BRAND (الاسم والشعار).
+- لوحة التحكم: MEAL_TYPES (أسماء الوجبات).
+- حاسبة المكملات: SUPPLEMENT_DISCLAIMER (النص القانوني).
+
+متى تتغير قيمته؟
+أبدًا أثناء التشغيل. لهذا نكتب export const (ثابت لا يتغير).
+
+قاعدة:
+const = ثابت لا يمكن إعادة تعيينه.
+export = نسمح لملفات أخرى باستيراده.
+==================================================
+*/
+
 /** العلامة التجارية الثابتة للنظام */
+// التعليق /** ... */ يسمى JSDoc — يساعد محرر الأكواد
+// على شرح ما يلي عند التمرير فوقه. لا يؤثر على التشغيل.
 
 export const BRAND = {
   nameAr: 'أكاديمية توب',
@@ -9,15 +44,23 @@ export const BRAND = {
   doctor: 'د. وليد عبد الرحمن عبد الظاهر',
   doctorTitle: 'إعداد وإشراف',
   tagline: 'خطط تغذية ذكية مبنية على العلم لرفع أداء السباح',
+  // year: يستخدم الكود الجاري ويأخذ سنة اليوم تلقائيًا
+  // (مثال: 2026) لظهورها في تذييل الموقع — لا نكتبها يدويًا.
   year: new Date().getFullYear(),
+  // as const: نقول لـ TypeScript "لا تسمح بتغيير هذه القيم أبدًا".
 } as const;
 
 export const CONTACT = {
+  // رقم الواتساب بصيغة العرض (للمستخدم في الصفحة).
   whatsappDisplay: '01500026288',
+  // رقم الواتساب بالصيغة الدولية (بدون + في البداية).
   whatsappIntl: '201500026288',
+  // رابط مباشر يفتح محادثة واتساب مع هذا الرقم.
   whatsappLink: 'https://wa.me/201500026288',
 } as const;
 
+// ROLES: قائمة "أدوار" المستخدمين في النظام.
+// كل مستخدم له دور واحد يحدد ما يستطيع فعله.
 export const ROLES = {
   athlete: 'سباح',
   guardian: 'ولي أمر',
@@ -26,8 +69,12 @@ export const ROLES = {
   admin: 'مدير النظام',
 } as const;
 
+// RoleKey: نصنع "نوعًا" جديدًا من مفاتيح ROLES.
+// (keyof = خذ مفاتيح الكائن: athlete, guardian, coach...)
+// الفائدة: TypeScript يتحقق أننا لا نكتب دورًا خاطئًا.
 export type RoleKey = keyof typeof ROLES;
 
+// AGE_GROUPS: فئات عمرية للسباحين.
 export const AGE_GROUPS = {
   child: 'طفل',
   junior: 'ناشئ',
@@ -35,6 +82,7 @@ export const AGE_GROUPS = {
   adult: 'بالغ',
 } as const;
 
+// SWIMMER_LEVELS: مستوى السباح (يؤثر على صعوبة خطة التدريب والتغذية).
 export const SWIMMER_LEVELS = {
   beginner: 'مبتدئ',
   intermediate: 'متوسط',
@@ -67,6 +115,8 @@ export const GYM_TYPES = {
   mixed: 'تمارين مختلطة',
 } as const;
 
+// GOALS: قائمة "أهداف" المستخدم — يتغير الحساب الغذائي حسب الهدف
+// (خفض دهون ≠ زيادة عضلات). القيم العربية هي ما يظهر للمستخدم.
 export const GOALS = {
   maintenance: 'الحفاظ على الوزن',
   fatLoss: 'خفض الدهون',
@@ -77,6 +127,7 @@ export const GOALS = {
   weightGain: 'زيادة الوزن بصورة صحية',
 } as const;
 
+// DIET_TYPES: أنواع الأنظمة الغذائية (نباتي، خالٍ من الجلوتين...).
 export const DIET_TYPES = {
   regular: 'نظام عادي',
   vegetarian: 'نباتي',
@@ -85,6 +136,7 @@ export const DIET_TYPES = {
   lactoseFree: 'خالٍ من اللاكتوز',
 } as const;
 
+// ACTIVITY_LEVELS: مستوى النشاط اليومي (يؤثر على عدد السعرات).
 export const ACTIVITY_LEVELS = {
   sedentary: 'قليل جدًا',
   light: 'خفيف',
@@ -92,6 +144,7 @@ export const ACTIVITY_LEVELS = {
   veryActive: 'نشط جدًا',
 } as const;
 
+// PLAN_TYPES: أنواع الخطط الغذائية التي يمكن توليدها.
 export const PLAN_TYPES = {
   daily: 'خطة يوم واحد',
   threeDays: 'خطة 3 أيام',
@@ -103,6 +156,9 @@ export const PLAN_TYPES = {
   postCompetition: 'خطة استشفاء بعد البطولة',
 } as const;
 
+// MEAL_TYPES: أسماء الوجبات بالعربي — تُستخدم في الخطط وفي سجل الطعام.
+// المفتاح (مثل breakfast) هو ما يُخزَّن في قاعدة البيانات،
+// والقيمة (مثل 'الفطور') هو ما يظهر للمستخدم.
 export const MEAL_TYPES = {
   breakfast: 'الفطور',
   snack1: 'وجبة خفيفة صباحية',
@@ -115,8 +171,11 @@ export const MEAL_TYPES = {
   supper: 'وجبة قبل النوم',
 } as const;
 
+// MealTypeKey: نوع يمثل مفاتيح الوجبات فقط (breakfast, lunch, dinner...)
 export type MealTypeKey = keyof typeof MEAL_TYPES;
 
+// MEAL_TYPE_ORDER: ترتيب الوجبات في اليوم من الفطور حتى ما قبل النوم.
+// تُستخدم لعرض الخطة اليومية بالترتيب الصحيح.
 export const MEAL_TYPE_ORDER: MealTypeKey[] = [
   'breakfast',
   'snack1',

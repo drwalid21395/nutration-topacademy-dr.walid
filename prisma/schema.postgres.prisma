@@ -4,10 +4,54 @@
 // للتبديل إلى SQLite استخدم: npm run db:sqlite
 // ============================================================
 
+// ============================================================
+// شرح الملف للمبتدئ
+// ============================================================
+// اسم الملف:
+// prisma/schema.prisma
+//
+// وظيفة الملف:
+// "مخطط قاعدة البيانات" — يصف شكل الجداول والعلاقات بينها.
+// كل model هنا = جدول في قاعدة البيانات.
+// كل سطر داخل model = عمود (حقل) في الجدول.
+//
+// لماذا نحتاجه؟
+// هذا هو "المصدر الوحيد للحقيقة" لشكل البيانات. من هذا الملف
+// تولّد Prisma الكود (أمر: prisma generate) الذي نستخدمه
+// في src/lib/prisma.ts للقراءة والكتابة.
+//
+// ما الفرق بين SQLite و PostgreSQL؟
+// - SQLite: ملف محلي بسيط (prisma/dev.db) — للتجربة السريعة.
+// - PostgreSQL: خادم قواعد بيانات قوي — للإنتاج (Neon على Vercel).
+// هناك نسختان من الملف (schema.prisma و schema.postgres.prisma)
+// يتم التبديل بينهما بـ scripts/use-db.js (انظر AGENTS.md).
+//
+// ترتيب التنفيذ (كيف تُستخدم):
+// 1. نعرّف النموذج هنا (model User {...}).
+// 2. نشغّل prisma generate → يولد PrismaClient.
+// 3. في الكود: prisma.user.findMany() / create() / update()...
+// 4. ما تعريف الجدول فعلًا؟ أمر prisma db push أو migrate
+//    (تحذير: لا تنفذه على الإنتاج إلا بطلب صريح — راجع AGENTS.md).
+//
+// كيف أقرأ السطور؟
+// - @id: هذا الحقل هو المعرف الفريد.
+// - @default(cuid()): قيمة تلقائية فريدة عند الإنشاء.
+// - @unique: لا يسمح بتكرار القيمة (مثل البريد).
+// - ?: الحقل اختياري (يمكن أن يكون null).
+// - @relation(...): ربط بين جدولين.
+// - العلاقات: profiles SwimmerProfile[] تعني "مستخدم له ملفات كثيرة".
+//
+// الأهم للمبتدئ: اقرأ نماذج User وSwimmerProfile وNutritionTargets
+// وMealPlan أولًا — هي قلب المشروع.
+// ============================================================
+
 generator client {
   provider = "prisma-client-js"
 }
 
+// datasource: تحديد نوع قاعدة البيانات ومكان الاتصال.
+// env("DATABASE_URL"): يأخذ الرابط من ملف .env
+// (ملف محلي غير مرفوع لـ git — فيه أسرار!).
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -15,29 +59,32 @@ datasource db {
 
 // ---------------- المستخدمون والأدوار ----------------
 
+// model User: جدول المستخدمين — كل من سجل حسابًا في الموقع.
 model User {
   id            String   @id @default(cuid())
   name          String
-  email         String   @unique
-  emailVerified DateTime?
+  email         String   @unique // بريد فريد — لا يتكرر
+  emailVerified DateTime? // متى تحقق من بريده (اختياري)
   phone         String?
-  passwordHash  String
+  passwordHash  String // كلمة المرور مشفرة (هاش) — لا نص خام
   image         String?
   role          String   @default("athlete") // athlete | guardian | coach | dietitian | admin
   status        String   @default("active") // active | suspended | deleted
-  isAdult       Boolean?
-  parentalConsent Boolean @default(false)
+  isAdult       Boolean? // هل تجاوز 18 عامًا
+  parentalConsent Boolean @default(false) // موافقة ولي الأمر للقاصر
   parentName    String?
   parentPhone   String?
   parentEmail   String?
   acceptTerms   Boolean  @default(false)
   acceptPrivacy Boolean  @default(false)
   lastLoginAt   DateTime?
-  resetToken    String?
+  resetToken    String? // رمز استعادة كلمة المرور
   resetTokenExp DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now()) // وقت الإنشاء
+  updatedAt     DateTime @updatedAt // يتحدث تلقائيًا عند التعديل
 
+  // ===== العلاقات: حقول "افتراضية" لا تُخزَّن — تصف الروابط =====
+  // User واحد له عدة ملفات/خطط/سجلات... (علاقة 1-إلى-كثير)
   profiles       SwimmerProfile[]
   mealPlans      MealPlan[]
   foodLogs       FoodLogEntry[]
@@ -73,58 +120,65 @@ model User {
 
 // ---------------- ملف السباح ----------------
 
+// model SwimmerProfile: بيانات السباح الغذائية والتدريبية
+// (مستخدم واحد له ملف واحد). يستخدمها الحاسب والخطط.
 model SwimmerProfile {
   id          String  @id @default(cuid())
-  userId      String
+  userId      String // المعرف الرابط للمستخدم
+  // user: الربط الفعلي — user_id يحيل لجدول User.
+  // onDelete: Cascade = لو حُذف المستخدم يُحذف ملفه تلقائيًا.
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // بيانات أساسية
   fullName    String
-  gender      String
+  gender      String // male | female
   birthDate   DateTime?
-  age         Int?
-  heightCm    Float?
-  weightKg    Float?
+  age         Int? // يُحسب تلقائيًا
+  heightCm    Float?  // الطول بالسنتيمتر
+  weightKg    Float?  // الوزن بالكيلوجرام
   targetWeightKg Float?
   bodyFatPercent Float?
   waistCm     Float?
   country     String?
   timezone    String?
-  ageGroup    String?
-  swimmerLevel String?
-  specialty   String?
-  mainDistances String?
-  personalBests String?
+  ageGroup    String? // child | junior | youth | adult
+  swimmerLevel String? // beginner | intermediate | advanced | competitor | professional
+  specialty   String? // freestyle | backstroke | breaststroke | butterfly | medley
+  mainDistances String? // قيم مفصولة بفاصلة
+  personalBests String? // JSON اختياري
   nextCompetitionDate DateTime?
 
-  swimSessionsPerWeek  Int?
-  swimMinutesPerSession Int?
-  trainingIntensity    String?
-  swimDistancePerSession Int?
-  gymSessionsPerWeek   Int?
+  // بيانات التدريب
+  swimSessionsPerWeek  Int? // عدد تمرينات السباحة
+  swimMinutesPerSession Int? // مدة التمرين
+  trainingIntensity    String? // low | moderate | high | veryHigh
+  swimDistancePerSession Int? // مسافة تقريبية بالأمتار
+  gymSessionsPerWeek   Int? // لياقة/جيم
   gymMinutesPerSession Int?
-  gymType              String?
-  restDays             String?
-  trainingTime         String?
+  gymType              String? // resistance | strength | endurance | flexibility | speed | mixed
+  restDays             String? // الأيام
+  trainingTime         String? // time of day
   hasDoubleTraining    Boolean @default(false)
   sleepHours           Float?
-  dailyActivityLevel   String?
+  dailyActivityLevel   String? // sedentary | light | moderate | veryActive
 
-  goal                String?
+  // الحالة الغذائية والصحية
+  goal                String? // maintenance | fatLoss | muscleGain | endurance | recovery | competition | weightGain
   allergies           String?
   dislikedFoods       String?
-  dietType            String?
+  dietType            String? // regular | vegetarian | semiVegetarian | glutenFree | lactoseFree
   preferredMealsPerDay Int?
-  budgetLevel         String?
+  budgetLevel         String? // low | medium | high
   availableFoods      String?
   chronicConditions   String?
   medications         String?
   currentInjuries     String?
   digestiveIssues     String?
-  pregnancyStatus     String?
+  pregnancyStatus     String? // none | pregnant | lactating
   isMinor             Boolean @default(false)
-  guardianData        String?
+  guardianData        String? // بيانات ولي الأمر JSON
   notes               String?
-  medicalAlert        Boolean @default(false)
+  medicalAlert        Boolean @default(false) // هل يحتاج تنبيهًا طبيًا
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -136,26 +190,31 @@ model SwimmerProfile {
 
 // ---------------- نتائج الحسابات الغذائية ----------------
 
+// model NutritionTargets: ناتج حاسبة الاحتياج الغذائي لكل سباح.
+// يخزن "الأرقام المستهدفة" التي تعتمد عليها الخطط:
+// السعرات، البروتين، الكربوهيدرات، الدهون، الماء...
+// كل سجل مرتبط بملف سباح واحد (profileId).
+// لا يُكتب يدويًا — تُنتجه دالة الحساب تلقائيًا.
 model NutritionTargets {
   id             String  @id @default(cuid())
-  profileId      String
+  profileId      String // رابط لملف السباح
   profile        SwimmerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
-  bmi            Float?
+  bmi            Float? // مؤشر كتلة الجسم (BMI)
   bmiCategory    String?
-  bmr            Float?
-  tdee           Float?
-  calories       Float?
-  calorieMin     Float?
+  bmr            Float? // معدل الأيض الأساسي (سعرات الراحة)
+  tdee           Float? // إجمالي استهلاك الطاقة اليومي
+  calories       Float? // السعرات المستهدفة
+  calorieMin     Float? // نطاق آمن
   calorieMax     Float?
-  proteinG       Float?
-  carbsG         Float?
-  fatG           Float?
-  fiberG         Float?
-  waterMl        Float?
-  trainingWaterMl Float?
-  sodiumMg       Float?
-  proteinPct     Float?
+  proteinG       Float? // البروتين بالجرام يوميًا
+  carbsG         Float? // الكربوهيدرات بالجرام
+  fatG           Float? // الدهون بالجرام
+  fiberG         Float? // الألياف
+  waterMl        Float? // احتياج الماء اليومي
+  trainingWaterMl Float? // إضافي أثناء التمرين
+  sodiumMg       Float? // الصوديوم
+  proteinPct     Float? // نسب التوزيع %
   carbsPct       Float?
   fatPct         Float?
   mealCalories   String? // توزيع السعرات على الوجبات (JSON)
@@ -164,7 +223,7 @@ model NutritionTargets {
   recommendations String? // توصيات أيام التدريب/الراحة/البطولة (JSON)
   createdAt      DateTime @default(now())
 
-  mealPlans MealPlan[]
+  mealPlans MealPlan[] // الخطط المبنية على هذه النتائج
 }
 
 // ---------------- قاعدة بيانات الطعام ----------------
@@ -183,8 +242,8 @@ model FoodItem {
   nameEn       String?
   categoryId   String?
   category     FoodCategory? @relation(fields: [categoryId], references: [id])
-  portionLabel String?
-  gramsPerPortion Float?
+  portionLabel String? // حجم الحصة (مثال: "قطعة متوسطة")
+  gramsPerPortion Float? // الوزن بالجرام
   calories     Float?
   proteinG     Float?
   carbsG       Float?
@@ -215,35 +274,39 @@ model FoodItem {
 
 // ---------------- الخطط الغذائية ----------------
 
+// model MealPlan: الخطة الغذائية الأسبوعية/اليومية التي تُولّد
+// لكل سباح بناءً على NutritionTargets. تحتوي على وجبات (Meal).
+// نفس المستخدم قد يملك عدة خطط (تعديلات أو خطط منافسة) —
+// isActive يحدد الخطة المعتمدة حاليًا.
 model MealPlan {
   id            String  @id @default(cuid())
-  userId        String
+  userId        String // مالك الخطة (السباح)
   user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  profileId     String?
+  profileId     String? // ملف السباح المستخدم في التوليد
   profile       SwimmerProfile? @relation(fields: [profileId], references: [id])
-  competitionId String? @unique
+  competitionId String? @unique // إن كانت خطة بطولة
   competition   Competition? @relation(fields: [competitionId], references: [id])
-  targetsId     String?
+  targetsId     String? // نتائج الحساب المعتمدة
   targets       NutritionTargets? @relation(fields: [targetsId], references: [id])
   title         String
-  durationDays  Int     @default(7)
-  planType      String?
+  durationDays  Int     @default(7) // مدة الخطة بالأيام
+  planType      String? // daily | threeDays | week | twoWeeks | thirtyDays | competitionPrep | competitionDay | postCompetition
   goal          String?
-  totalCalories Float?
+  totalCalories Float? // إجماليات الخطة
   proteinG      Float?
   carbsG        Float?
   fatG          Float?
   waterMl       Float?
-  mealsPerDay   Int     @default(5)
-  isCompetitionMode Boolean @default(false)
-  isActive      Boolean @default(false)
-  version       Int     @default(1)
-  generatedWith String?
+  mealsPerDay   Int     @default(5) // عدد الوجبات يوميًا
+  isCompetitionMode Boolean @default(false) // وضع البطولة
+  isActive      Boolean @default(false) // الخطة المعتمدة الحالية
+  version       Int     @default(1) // رقم إصدار الخطة
+  generatedWith String? // formula version
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  meals     Meal[]
-  reports   Report[]
+  meals     Meal[] // وجبات الخطة
+  reports   Report[] // التقارير المولدة منها
 }
 
 model Meal {
@@ -251,14 +314,14 @@ model Meal {
   planId    String
   plan      MealPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   dayNumber Int      @default(1)
-  mealType  String
+  mealType  String // breakfast | snack1 | preWorkout | lunch | duringWorkout | postWorkout | dinner | snack2 | supper
   title     String
-  timing    String?
+  timing    String? // مثال: "8:00 صباحًا"
   calories  Float?
   proteinG  Float?
   carbsG    Float?
   fatG      Float?
-  note      String?
+  note      String? // نصائح / توقيت
   items     MealItem[]
 
   @@index([planId, dayNumber])
@@ -271,14 +334,14 @@ model MealItem {
   foodId    String?
   food      FoodItem? @relation(fields: [foodId], references: [id])
   foodNameAr String
-  quantity  String?
+  quantity  String? // كمية بجرام أو وحدة منزلية
   grams     Float?
   calories  Float?
   proteinG  Float?
   carbsG    Float?
   fatG      Float?
-  isAlternative Boolean @default(false)
-  alternativeType String?
+  isAlternative Boolean @default(false) // بديل
+  alternativeType String? // economical | vegetarian | lactoseFree | glutenFree | swap
 }
 
 // ---------------- السجل اليومي ----------------
@@ -297,8 +360,8 @@ model FoodLogEntry {
   fatG      Float?
   fiberG    Float?
   sodiumMg  Float?
-  waterMl   Float?
-  source    String @default("manual")
+  waterMl   Float? // ماء مصاحب
+  source    String @default("manual") // manual | analysis | photo
   analysisId String? @unique
   analysis   MealAnalysis? @relation(fields: [analysisId], references: [id])
   note      String?
@@ -320,7 +383,7 @@ model TrainingLogEntry {
   userId      String
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime @default(now())
-  sessionType String
+  sessionType String // swim | gym
   durationMin Int?
   distanceM   Int?
   intensity   String?
@@ -335,10 +398,10 @@ model RecoveryLogEntry {
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   date        DateTime @default(now())
   sleepHours  Float?
-  energyLevel Int?
-  hungerLevel Int?
-  stressLevel Int?
-  recoveryLevel Int?
+  energyLevel Int? // 1-10
+  hungerLevel Int? // 1-10
+  stressLevel Int? // 1-10
+  recoveryLevel Int? // 1-10
   weightKg    Float?
   notes       String?
   createdAt   DateTime @default(now())
@@ -363,7 +426,7 @@ model Photo {
   url       String
   storageKey String?
   analysisConsent Boolean @default(true)
-  autoDeleteAt DateTime?
+  autoDeleteAt DateTime? // مدة الاحتفاظ
   analysis  MealAnalysis?
   createdAt DateTime @default(now())
 }
@@ -374,7 +437,7 @@ model MealAnalysis {
   user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   photoId     String? @unique
   photo       Photo?  @relation(fields: [photoId], references: [id])
-  provider    String @default("mock")
+  provider    String @default("mock") // mock | openai | gemini
   rawResponse String? // استجابة المزود (JSON)
   foods      String? // قائمة الأطعمة المكتشفة (JSON)
   totalCalories Float?
@@ -425,14 +488,14 @@ model NotificationPref {
   breakfastTime String?
   lunchTime     String?
   dinnerTime    String?
-  snackTimes    String?
+  snackTimes    String? // JSON
   preWorkoutTime String?
   postWorkoutTime String?
-  waterInterval Int?
+  waterInterval Int? // بالدقائق
   trainingTime  String?
   sleepTime     String?
   weighInTime   String?
-  competitionReminderDays Int?
+  competitionReminderDays Int? 
   planReviewReminderDays Int?
   soundEnabled  Boolean @default(false)
   quietHoursStart String?
@@ -440,8 +503,8 @@ model NotificationPref {
   pushEnabled   Boolean @default(false)
   inAppEnabled  Boolean @default(true)
   smartAlerts   Boolean @default(true)
-  waterLowAlertThreshold Int?
-  days          String?
+  waterLowAlertThreshold Int? // نسبة
+  days          String? // JSON أيام الأسبوع
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
@@ -450,10 +513,10 @@ model Notification {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type      String
+  type      String // meal | water | training | sleep | weight | competition | review | smart | system
   title     String
   body      String?
-  channel   String @default("inapp")
+  channel   String @default("inapp") // inapp | push
   isRead    Boolean @default(false)
   isDismissed Boolean @default(false)
   scheduledFor DateTime?
@@ -693,7 +756,7 @@ model CoachRelation {
   coach     User    @relation("CoachUser", fields: [coachId], references: [id], onDelete: Cascade)
   athleteId String
   athlete   User    @relation("AthleteUser", fields: [athleteId], references: [id], onDelete: Cascade)
-  status    String @default("pending")
+  status    String @default("pending") // pending | active | rejected
   canEditPlan Boolean @default(false)
   canViewHealth Boolean @default(false)
   nextReviewAt DateTime?
@@ -735,7 +798,7 @@ model Report {
   userId    String
   planId    String?
   plan      MealPlan? @relation(fields: [planId], references: [id])
-  type      String @default("weekly")
+  type      String @default("weekly") // weekly | plan | progress | competition
   title     String
   summary   String? // JSON
   pdfUrl    String?
@@ -780,18 +843,18 @@ model WearableConnection {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider      String
+  provider      String   // appleHealth | healthConnect | samsungHealth | fitbit | garmin | huawei | xiaomi | amazfit | polar | whoop | oura | strava | manual
   providerName  String
-  status        String   @default("connected")
+  status        String   @default("connected") // connected | disconnected | error
   deviceName    String?
-  accessToken   String?
-  refreshToken  String?
+  accessToken   String? // مشفّر
+  refreshToken  String? // مشفّر
   tokenExpiresAt DateTime?
-  scopes        String?
+  scopes        String? // JSON — الصلاحيات الممنوحة
   consentAt     DateTime?
   lastSyncAt    DateTime?
   lastSyncError String?
-  source        String   @default("device")
+  source        String   @default("device") // device | manual
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -805,18 +868,18 @@ model DailyActivity {
   date                DateTime
   steps               Int      @default(0)
   distanceM           Float?
-  activeCalories      Float?
-  restingCalories     Float?
-  workoutCalories     Float?
-  totalCaloriesBurned Float?
+  activeCalories      Float? // سعرات النشاط فقط (بدون BMR)
+  restingCalories     Float? // BMR/راحة
+  workoutCalories     Float? // سعرات التدريبات المسجلة
+  totalCaloriesBurned Float? // إجمالي المحروق كما يعرضه الجهاز
   workoutMinutes      Int      @default(0)
   sleepMinutes        Int?
   avgHeartRate        Int?
   restingHeartRate    Int?
-  trainingLoad        String?
+  trainingLoad        String? // rest | light | moderate | hard | veryHigh
   loadScore           Float?
-  sources             String?
-  confidence          String?
+  sources             String? // JSON — المزودون المساهمون
+  confidence          String? // high | medium | estimated
   updatedAt           DateTime @updatedAt
 
   @@unique([userId, date])
@@ -827,15 +890,15 @@ model WorkoutSession {
   id             String   @id @default(cuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sportType      String
+  sportType      String   // swim | gym | run | cycle | walk | other
   startTime      DateTime
   durationMin    Int?
   caloriesBurned Float?
   distanceM      Float?
-  intensity      String?
-  source         String   @default("manual")
+  intensity      String? // low | moderate | high | veryHigh
+  source         String   @default("manual") // device | manual
   provider       String?
-  externalId     String?
+  externalId     String? // معرف المصدر — لتفادي التكرار من أكثر من مزود
   laps           Int?
   poolLengthM    Float?
   strokeType     String?
@@ -843,7 +906,7 @@ model WorkoutSession {
   swolf          Float?
   avgHeartRate   Int?
   note           String?
-  confidence     String?
+  confidence     String? // high | medium | estimated
   createdAt      DateTime @default(now())
 
   @@index([userId, startTime])
@@ -854,17 +917,17 @@ model DynamicNutritionTarget {
   userId            String
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   date              DateTime
-  baseCalories      Float
-  activityCalories  Float  @default(0)
+  baseCalories      Float // الهدف الأساسي قبل النشاط
+  activityCalories  Float  @default(0) // السعرات المؤهلة فقط (بعد المعاوضة)
   compensationFactor Float @default(0.5)
   adjustedCalories  Float
   proteinG          Float?
   carbsG            Float?
   fatG              Float?
   waterMl           Float?
-  consumedCalories  Float?
-  adjustments       String?
-  reason            String?
+  consumedCalories  Float? // لقطة لحظة الحساب
+  adjustments       String? // JSON — تفاصيل التعديل
+  reason            String? // شرح سبب التعديل
   isAdjusted        Boolean @default(false)
   createdAt         DateTime @default(now())
 
@@ -877,7 +940,7 @@ model SyncLog {
   userId     String
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   provider   String
-  status     String
+  status     String   // success | error | skipped
   items      Int      @default(0)
   message    String?
   durationMs Int?
