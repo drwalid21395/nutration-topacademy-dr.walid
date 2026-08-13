@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Plus,
   Moon,
+  Zap,
 } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -22,8 +23,18 @@ import { AppShell } from '@/components/layout/app-shell';
 import { Card, Stat, ProgressRing, ProgressBar, Badge, Alert, EmptyState } from '@/components/ui';
 import { MEAL_TYPES } from '@/lib/constants';
 import { formatNumber, startOfToday, formatDate, cn } from '@/lib/utils';
+import { getTodayState } from '@/lib/nutrition/dynamic';
+import { AutoSync } from '@/components/wearables/auto-sync';
 
 export const metadata = { title: 'لوحة التحكم' };
+
+const LOAD_AR: Record<string, string> = {
+  rest: 'راحة',
+  light: 'خفيف',
+  moderate: 'متوسط',
+  hard: 'شاق',
+  veryHigh: 'مرتفع جدًا',
+};
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -82,8 +93,6 @@ export default async function DashboardPage() {
   const targetProtein = latestTargets?.proteinG ?? 120;
   const targetWater = latestTargets?.waterMl ?? 2800;
 
-  const remaining = Math.max(0, targetCals - eatenCals);
-
   // الوجبة القادمة حسب الوقت
   const nowHour = new Date().getHours();
   const currentDay = activePlan?.meals?.filter((m) => m.dayNumber === 1) ?? [];
@@ -107,6 +116,12 @@ export default async function DashboardPage() {
 
   const hasProfile = !!profile;
 
+  // المحرك الديناميكي: هدف اليوم القابل للتعديل حسب النشاط.
+  const todayState = await getTodayState(user.id);
+  const dynamicTarget = todayState.dynamic?.adjustedCalories ?? targetCals;
+  const dynamicWater = todayState.dynamic?.waterMl ?? targetWater;
+  const dynamicProtein = todayState.dynamic?.proteinG ?? targetProtein;
+
   return (
     <AppShell user={user}>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -119,6 +134,10 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/wearables" className="btn-secondary">
+            <RefreshCw className="h-4 w-4" />
+            ربط الساعة
+          </Link>
           <Link href="/meal-analyzer" className="btn-primary">
             <Camera className="h-4 w-4" />
             تحليل وجبة
@@ -141,22 +160,23 @@ export default async function DashboardPage() {
       {/* بطاقات التقدم */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card className="flex flex-col items-center justify-center gap-2">
-          <ProgressRing value={(eatenCals / targetCals) * 100} color="#1d84bc" label="السعرات اليومية" />
+          <ProgressRing value={(eatenCals / dynamicTarget) * 100} color="#1d84bc" label="السعرات اليومية" />
           <p className="text-center text-xs text-slate-500">
-            {formatNumber(eatenCals)} / {formatNumber(targetCals)} سعرة
-            <span className="mt-0.5 block font-bold text-emerald-600">المتبقي {formatNumber(remaining)}</span>
+            {formatNumber(eatenCals)} / {formatNumber(dynamicTarget)} سعرة
+            {todayState.dynamic?.isAdjusted ? <span className="mt-0.5 block font-bold text-ocean-600">هدف ديناميكي ⚡</span> : null}
+            <span className="mt-0.5 block font-bold text-emerald-600">المتبقي {formatNumber(todayState.remainingCalories)}</span>
           </p>
         </Card>
         <Card className="flex flex-col items-center justify-center gap-2">
-          <ProgressRing value={(waterMl / targetWater) * 100} color="#17a8ab" label="الماء" />
+          <ProgressRing value={(waterMl / dynamicWater) * 100} color="#17a8ab" label="الماء" />
           <p className="text-center text-xs text-slate-500">
-            {formatNumber(waterMl)} / {formatNumber(targetWater)} مل
+            {formatNumber(waterMl)} / {formatNumber(dynamicWater)} مل
           </p>
         </Card>
         <Card className="flex flex-col items-center justify-center gap-2">
-          <ProgressRing value={(eatenProtein / targetProtein) * 100} color="#d9a23a" label="البروتين" />
+          <ProgressRing value={(eatenProtein / dynamicProtein) * 100} color="#d9a23a" label="البروتين" />
           <p className="text-center text-xs text-slate-500">
-            {formatNumber(eatenProtein, 1)} / {formatNumber(targetProtein, 1)} جم
+            {formatNumber(eatenProtein, 1)} / {formatNumber(dynamicProtein, 1)} جم
           </p>
         </Card>
         <Card className="flex flex-col items-center justify-center gap-2">
@@ -170,6 +190,95 @@ export default async function DashboardPage() {
           </p>
         </Card>
       </div>
+
+      {/* التغذية الديناميكية */}
+      <Card className="mt-5 overflow-hidden p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 p-4 sm:p-5">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-bold text-ocean-900">
+              <Zap className="h-4 w-4 text-gold-500" />
+              التغذية الديناميكية اليوم
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">الهدف يتحدّث تلقائيًا مع نشاط ساعتك وتدريباتك.</p>
+          </div>
+          <Badge color={todayState.dynamic?.isAdjusted ? 'green' : 'slate'}>
+            {todayState.dynamic?.isAdjusted ? `+${formatNumber(todayState.dynamic.activityCalories)} سعرة من النشاط` : 'بلا تعديل'}
+          </Badge>
+        </div>
+        <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-3">
+          {/* السعرات */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between rounded-xl bg-ocean-50 p-3">
+              <span className="text-xs font-bold text-slate-500">الهدف الديناميكي</span>
+              <span className="font-black text-ocean-900">{formatNumber(dynamicTarget)} سعرة</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-slate-50 p-3">
+              <span className="text-xs font-bold text-slate-500">المستهلك</span>
+              <span className="font-black text-slate-700">{formatNumber(eatenCals)} سعرة</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-gold-300/20 p-3">
+              <span className="text-xs font-bold text-slate-500">إضافة النشاط</span>
+              <span className="font-black text-gold-600">+{formatNumber(todayState.dynamic?.activityCalories ?? 0)} سعرة</span>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-emerald-50 p-3">
+              <span className="text-xs font-bold text-slate-500">المتبقي لليوم</span>
+              <span className="font-black text-emerald-600">{formatNumber(todayState.remainingCalories)} سعرة</span>
+            </div>
+          </div>
+
+          {/* الماكروز والماء */}
+          <div className="space-y-3">
+            <ProgressBar label={`البروتين (${formatNumber(eatenProtein, 1)}/${formatNumber(dynamicProtein, 1)} جم)`} value={(eatenProtein / dynamicProtein) * 100} color="gold" />
+            <ProgressBar label={`الكربوهيدرات (${formatNumber(eatenCarbs, 1)}/${formatNumber(todayState.dynamic?.carbsG ?? latestTargets?.carbsG ?? 250, 1)} جم)`} value={(eatenCarbs / (todayState.dynamic?.carbsG ?? latestTargets?.carbsG ?? 250)) * 100} color="ocean" />
+            <ProgressBar label={`الدهون (${formatNumber(eatenFat, 1)}/${formatNumber(todayState.dynamic?.fatG ?? latestTargets?.fatG ?? 70, 1)} جم)`} value={(eatenFat / (todayState.dynamic?.fatG ?? latestTargets?.fatG ?? 70)) * 100} color="green" />
+            <ProgressBar label={`الماء (${formatNumber(waterMl)}/${formatNumber(dynamicWater)} مل)`} value={(waterMl / dynamicWater) * 100} color="ocean" />
+          </div>
+
+          {/* النشاط والاقتراح */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl bg-slate-50 p-3 text-center">
+                <p className="text-lg font-black text-ocean-900">{formatNumber(todayState.activity?.steps ?? 0)}</p>
+                <p className="text-[10px] font-semibold text-slate-400">خطوة</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 text-center">
+                <p className="text-lg font-black text-ocean-900">{todayState.workoutMinutes}</p>
+                <p className="text-[10px] font-semibold text-slate-400">دقيقة تدريب</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 text-center">
+                <p className="text-lg font-black text-ocean-900">{formatNumber(todayState.swimDistanceM, 0)}</p>
+                <p className="text-[10px] font-semibold text-slate-400">م سباحة</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 text-center">
+                <p className="text-lg font-black text-ocean-900">{todayState.activity?.avgHeartRate ?? '—'}</p>
+                <p className="text-[10px] font-semibold text-slate-400">نبض</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500">تحميل التدريب</span>
+                <Badge>{LOAD_AR[todayState.activity?.trainingLoad ?? 'rest'] ?? '—'}</Badge>
+              </div>
+              {todayState.activity?.loadScore != null && (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                  <div className="h-full rounded-full bg-ocean-500" style={{ width: `${todayState.activity.loadScore}%` }} />
+                </div>
+              )}
+            </div>
+            {todayState.nextMeal && (
+              <div className="rounded-xl bg-gold-300/15 p-3">
+                <p className="text-xs font-black text-ocean-900">🍽 {todayState.nextMeal.title}</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{todayState.nextMeal.note}</p>
+              </div>
+            )}
+          </div>
+        </div>
+        {todayState.dynamic?.reason && (
+          <div className="border-t border-slate-100 bg-ocean-50/50 p-3 text-[11px] leading-relaxed text-slate-500">
+            💡 {todayState.dynamic.reason}
+          </div>
+        )}
+      </Card>
 
       <div className="mt-6 grid gap-5 lg:grid-cols-3">
         {/* الوجبة القادمة والخطة */}
@@ -384,6 +493,7 @@ export default async function DashboardPage() {
           </Card>
         </div>
       </div>
+      <AutoSync />
     </AppShell>
   );
 }

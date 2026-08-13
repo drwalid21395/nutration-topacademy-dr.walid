@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   UserCheck,
   LogOut,
+  Watch,
 } from 'lucide-react';
 import { AppHeader } from '@/components/layout/app-header';
 import { cn } from '@/lib/utils';
@@ -39,6 +40,7 @@ const NAV = [
   { href: '/food-log', label: 'سجل الطعام', icon: Utensils },
   { href: '/water-log', label: 'سجل الماء', icon: Droplets },
   { href: '/training-log', label: 'سجل التمارين', icon: Dumbbell },
+  { href: '/wearables', label: 'ربط الساعة', icon: Watch },
   { href: '/recovery-log', label: 'النوم والاستشفاء', icon: Moon },
   { href: '/competition-mode', label: 'وضع البطولة', icon: Trophy },
   { href: '/supplements', label: 'دليل المكملات', icon: Pill },

@@ -1,3 +1,6 @@
 {
-  "buildCommand": "node scripts/use-db.js postgres && prisma generate && prisma db push --skip-generate && next build"
+  "buildCommand": "node scripts/use-db.js postgres && prisma generate && prisma db push --skip-generate && next build",
+  "crons": [
+    { "path": "/api/wearables/sync-all", "schedule": "0 4 * * *" }
+  ]
 }

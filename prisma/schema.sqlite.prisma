@@ -64,6 +64,11 @@ model User {
   supplementIntakeLogs SupplementIntakeLog[]
   supplementNotifications SupplementNotification[]
   supplementApprovals SupplementApproval[] @relation("SupplementApprover")
+  wearableConnections WearableConnection[]
+  dailyActivities DailyActivity[]
+  workoutSessions WorkoutSession[]
+  dynamicTargets DynamicNutritionTarget[]
+  syncLogs SyncLog[]
 }
 
 // ---------------- ملف السباح ----------------
@@ -770,4 +775,116 @@ model AuditLog {
   ip        String?
   metadata  String? // JSON
   createdAt DateTime @default(now())
+}
+
+// ---------------- الساعات الذكية والبيانات الصحية ----------------
+
+model WearableConnection {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider      String   // appleHealth | healthConnect | samsungHealth | fitbit | garmin | huawei | xiaomi | amazfit | polar | whoop | oura | strava | manual
+  providerName  String
+  status        String   @default("connected") // connected | disconnected | error
+  deviceName    String?
+  accessToken   String? // مشفّر
+  refreshToken  String? // مشفّر
+  tokenExpiresAt DateTime?
+  scopes        String? // JSON — الصلاحيات الممنوحة
+  consentAt     DateTime?
+  lastSyncAt    DateTime?
+  lastSyncError String?
+  source        String   @default("device") // device | manual
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model DailyActivity {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                DateTime
+  steps               Int      @default(0)
+  distanceM           Float?
+  activeCalories      Float? // سعرات النشاط فقط (بدون BMR)
+  restingCalories     Float? // BMR/راحة
+  workoutCalories     Float? // سعرات التدريبات المسجلة
+  totalCaloriesBurned Float? // إجمالي المحروق كما يعرضه الجهاز
+  workoutMinutes      Int      @default(0)
+  sleepMinutes        Int?
+  avgHeartRate        Int?
+  restingHeartRate    Int?
+  trainingLoad        String? // rest | light | moderate | hard | veryHigh
+  loadScore           Float?
+  sources             String? // JSON — المزودون المساهمون
+  confidence          String? // high | medium | estimated
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model WorkoutSession {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sportType      String   // swim | gym | run | cycle | walk | other
+  startTime      DateTime
+  durationMin    Int?
+  caloriesBurned Float?
+  distanceM      Float?
+  intensity      String? // low | moderate | high | veryHigh
+  source         String   @default("manual") // device | manual
+  provider       String?
+  externalId     String? // معرف المصدر — لتفادي التكرار من أكثر من مزود
+  laps           Int?
+  poolLengthM    Float?
+  strokeType     String?
+  avgPacePer100m Float?
+  swolf          Float?
+  avgHeartRate   Int?
+  note           String?
+  confidence     String? // high | medium | estimated
+  createdAt      DateTime @default(now())
+
+  @@index([userId, startTime])
+}
+
+model DynamicNutritionTarget {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date              DateTime
+  baseCalories      Float // الهدف الأساسي قبل النشاط
+  activityCalories  Float  @default(0) // السعرات المؤهلة فقط (بعد المعاوضة)
+  compensationFactor Float @default(0.5)
+  adjustedCalories  Float
+  proteinG          Float?
+  carbsG            Float?
+  fatG              Float?
+  waterMl           Float?
+  consumedCalories  Float? // لقطة لحظة الحساب
+  adjustments       String? // JSON — تفاصيل التعديل
+  reason            String? // شرح سبب التعديل
+  isAdjusted        Boolean @default(false)
+  createdAt         DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model SyncLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String
+  status     String   // success | error | skipped
+  items      Int      @default(0)
+  message    String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

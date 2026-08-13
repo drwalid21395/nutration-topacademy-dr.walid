@@ -64,6 +64,11 @@ model User {
   supplementIntakeLogs SupplementIntakeLog[]
   supplementNotifications SupplementNotification[]
   supplementApprovals SupplementApproval[] @relation("SupplementApprover")
+  wearableConnections WearableConnection[]
+  dailyActivities DailyActivity[]
+  workoutSessions WorkoutSession[]
+  dynamicTargets DynamicNutritionTarget[]
+  syncLogs SyncLog[]
 }
 
 // ---------------- ملف السباح ----------------
@@ -767,4 +772,116 @@ model AuditLog {
   ip        String?
   metadata  String? // JSON
   createdAt DateTime @default(now())
+}
+
+// ---------------- الساعات الذكية والبيانات الصحية ----------------
+
+model WearableConnection {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider      String
+  providerName  String
+  status        String   @default("connected")
+  deviceName    String?
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiresAt DateTime?
+  scopes        String?
+  consentAt     DateTime?
+  lastSyncAt    DateTime?
+  lastSyncError String?
+  source        String   @default("device")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model DailyActivity {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date                DateTime
+  steps               Int      @default(0)
+  distanceM           Float?
+  activeCalories      Float?
+  restingCalories     Float?
+  workoutCalories     Float?
+  totalCaloriesBurned Float?
+  workoutMinutes      Int      @default(0)
+  sleepMinutes        Int?
+  avgHeartRate        Int?
+  restingHeartRate    Int?
+  trainingLoad        String?
+  loadScore           Float?
+  sources             String?
+  confidence          String?
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model WorkoutSession {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sportType      String
+  startTime      DateTime
+  durationMin    Int?
+  caloriesBurned Float?
+  distanceM      Float?
+  intensity      String?
+  source         String   @default("manual")
+  provider       String?
+  externalId     String?
+  laps           Int?
+  poolLengthM    Float?
+  strokeType     String?
+  avgPacePer100m Float?
+  swolf          Float?
+  avgHeartRate   Int?
+  note           String?
+  confidence     String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, startTime])
+}
+
+model DynamicNutritionTarget {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date              DateTime
+  baseCalories      Float
+  activityCalories  Float  @default(0)
+  compensationFactor Float @default(0.5)
+  adjustedCalories  Float
+  proteinG          Float?
+  carbsG            Float?
+  fatG              Float?
+  waterMl           Float?
+  consumedCalories  Float?
+  adjustments       String?
+  reason            String?
+  isAdjusted        Boolean @default(false)
+  createdAt         DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model SyncLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider   String
+  status     String
+  items      Int      @default(0)
+  message    String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
