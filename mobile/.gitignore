@@ -1,0 +1,17 @@
+# ترجمة التطبيق
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# إعدادات خاصة بالمطوّر
+.idea/
+*.iml
+android/app/local.properties
+android/.gradle/
+ios/Pods/
+ios/.symlinks/
+
+# المفاتيح والسرية
+*.jks
+*.keystore

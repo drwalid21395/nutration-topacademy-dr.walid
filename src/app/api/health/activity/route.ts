@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getApiUser } from '@/lib/api-user';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { rateLimit, audit } from '@/lib/security';
@@ -6,7 +7,7 @@ import { ingestActivity, logSync } from '@/lib/wearables/sync';
 
 /** إدخال نشاط يومي (يدوي أو من جهاز) عبر خط التطبيع الموحّد. */
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
+  const user = await getApiUser(req);
   if (!user) return NextResponse.json({ error: 'يجب تسجيل الدخول' }, { status: 401 });
 
   if (!rateLimit(`health:${user.id}`, 30, 60_000)) {

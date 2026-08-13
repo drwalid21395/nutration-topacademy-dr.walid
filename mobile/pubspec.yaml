@@ -1,0 +1,24 @@
+name: top_academy_bridge
+description: جسر ربط الساعات الذكية — Top Academy Smart Swimmer Nutrition
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  health: ^13.3.1
+  http: ^1.2.0
+  flutter_secure_storage: ^9.2.2
+  intl: ^0.20.0
+  shared_preferences: ^2.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
