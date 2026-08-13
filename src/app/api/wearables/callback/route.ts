@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { encryptText } from '@/lib/crypto';
 import { audit } from '@/lib/security';
+import { getProviderEnv } from '@/lib/wearables/providers';
 
 /**
  * نقطة استرجاع OAuth 2.0 — تُستدعى من المزود بعد موافقة المستخدم.
@@ -11,6 +12,7 @@ const TOKEN_URLS: Record<string, string> = {
   fitbit: 'https://api.fitbit.com/oauth2/token',
   garmin: 'https://connect.garmin.com/oauth2/token',
   huawei: 'https://oauth-login.cloud.huawei.com/oauth2/v2/token',
+  honor: 'https://oauth-login.cloud.huawei.com/oauth2/v2/token',
   polar: 'https://polarremote.com/v2/oauth2/token',
   whoop: 'https://api-oauth.whoop.com/oauth/token',
   oura: 'https://api.ouraring.com/oauth/token',
@@ -43,8 +45,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL('/wearables?error=state', url.origin));
   }
 
-  const clientId = process.env[`${provider.replace(/([A-Z])/g, '_$1').toUpperCase()}_CLIENT_ID`];
-  const clientSecret = process.env[`${provider.replace(/([A-Z])/g, '_$1').toUpperCase()}_CLIENT_SECRET`];
+  const env = getProviderEnv(provider);
+  const clientId = env?.clientIdEnv ? (process.env[env.clientIdEnv] ?? '') : '';
+  const clientSecret = env?.clientSecretEnv ? (process.env[env.clientSecretEnv] ?? '') : '';
   const tokenUrl = TOKEN_URLS[provider];
 
   let accessToken = code;

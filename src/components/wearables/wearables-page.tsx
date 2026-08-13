@@ -55,6 +55,7 @@ const ICONS: Record<string, React.ReactNode> = {
   fitbit: <Activity className="h-6 w-6" />,
   garmin: <Watch className="h-6 w-6" />,
   huawei: <Smartphone className="h-6 w-6" />,
+  honor: <Watch className="h-6 w-6" />,
   xiaomi: <Smartphone className="h-6 w-6" />,
   amazfit: <Watch className="h-6 w-6" />,
   polar: <HeartPulse className="h-6 w-6" />,

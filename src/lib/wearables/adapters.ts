@@ -1,5 +1,5 @@
 import { WearableProviderAdapter, ProviderNotConfiguredError, ProviderHealthData } from './types';
-import { isProviderConfigured } from './providers';
+import { isProviderConfigured, getProviderEnv } from './providers';
 import { StravaAdapter } from './strava';
 import { PolarAdapter } from './polar';
 import { FitbitAdapter } from './fitbit';
@@ -30,6 +30,11 @@ const OAUTH: Record<string, OAuthConfig> = {
     scopes: ['activity', 'heart_rate', 'sleep', 'weight', 'user_profile'],
   },
   huawei: {
+    authorizeUrl: 'https://oauth-login.cloud.huawei.com/oauth2/v2/authorize',
+    tokenUrl: 'https://oauth-login.cloud.huawei.com/oauth2/v2/token',
+    scopes: ['openid', 'profile', 'health'],
+  },
+  honor: {
     authorizeUrl: 'https://oauth-login.cloud.huawei.com/oauth2/v2/authorize',
     tokenUrl: 'https://oauth-login.cloud.huawei.com/oauth2/v2/token',
     scopes: ['openid', 'profile', 'health'],
@@ -93,7 +98,8 @@ export class GenericOAuthAdapter implements WearableProviderAdapter {
       // المزود يتطلب مسار موبايل/تطبيق صحي — لا يمكن ربطه مباشرة بالمتصفح.
       return { status: 'configured' };
     }
-    const clientId = process.env[`${this.id.replace(/([A-Z])/g, '_$1').toUpperCase()}_CLIENT_ID`];
+    const env = getProviderEnv(this.id);
+    const clientId = env?.clientIdEnv ? (process.env[env.clientIdEnv] ?? '') : '';
     const redirectUri = `${process.env.NEXTAUTH_URL ?? ''}/api/wearables/callback?provider=${this.id}`;
     const params = new URLSearchParams({
       response_type: 'code',
