@@ -22,6 +22,7 @@ import { prisma } from '@/lib/prisma';
 import { AppShell } from '@/components/layout/app-shell';
 import { Card, CardHeader, Badge, EmptyState } from '@/components/ui';
 import { UserAvatar } from '@/components/ui/user-avatar';
+import { MealAnalysisCard, parseMealFoods } from '@/components/analyzer/meal-analysis-card';
 import { formatNumber, formatDate, formatShortDate, startOfToday } from '@/lib/utils';
 import { ROLES, PLAN_TYPES } from '@/lib/constants';
 
@@ -94,6 +95,7 @@ export default async function AdminSwimmerDetailPage({
         where: { userId: id },
         orderBy: { createdAt: 'desc' },
         take: 5,
+        include: { photo: { select: { url: true } } },
       }),
       prisma.notification.findMany({
         where: { userId: id },
@@ -323,20 +325,33 @@ export default async function AdminSwimmerDetailPage({
         </Card>
 
         {/* تحليلات الوجبات (AI) */}
-        <Card className="p-4 sm:p-5">
-          <CardHeader icon={<Camera className="h-5 w-5" />} title="تحليلات الوجبات (AI)" />
+        <Card className="p-4 sm:p-5 lg:col-span-2">
+          <CardHeader
+            icon={<Camera className="h-5 w-5" />}
+            title="تحليلات الوجبات (AI)"
+            subtitle="آخر تحليلات صور الوجبات — مكونات وإجماليات كل وجبة."
+          />
           {analyses.length === 0 ? (
             <p className="text-sm text-slate-400">لا توجد تحليلات.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {analyses.map((a) => (
-                <div key={a.id} className="flex items-center justify-between gap-2.5 rounded-xl bg-slate-50 px-2.5 py-2 sm:gap-3 sm:px-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-bold text-slate-800">{a.foods ?? 'وجبة محللة'}</p>
-                    <p className="text-[10px] text-slate-400">{formatShortDate(a.createdAt)} · {a.provider}</p>
-                  </div>
-                  <p className="shrink-0 text-xs font-black text-ocean-900">{formatNumber(a.totalCalories)} سعرة</p>
-                </div>
+                <MealAnalysisCard
+                  key={a.id}
+                  foods={parseMealFoods(a.foods)}
+                  photoUrl={a.photo?.url}
+                  provider={a.provider}
+                  confidence={a.confidence}
+                  needsReview={a.needsReview}
+                  totalCalories={a.totalCalories}
+                  totalProteinG={a.totalProteinG}
+                  totalCarbsG={a.totalCarbsG}
+                  totalFatG={a.totalFatG}
+                  totalFiberG={a.totalFiberG}
+                  totalSodiumMg={a.totalSodiumMg}
+                  notes={a.notes}
+                  createdAt={a.createdAt}
+                />
               ))}
             </div>
           )}
