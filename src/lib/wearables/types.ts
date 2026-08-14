@@ -1,3 +1,36 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/types.ts
+
+وظيفة الملف:
+تعريف كل "الأشكال" التي تستعملها طبقة تكامل الساعات الذكية:
+قائمة المزودين، بيانات النشاط والتدريب "الموحّدة"، واجهة
+المحوّل (Adapter)، والخطأ الموحّد.
+
+لماذا نحتاجه؟
+هذا قلب فكرة Provider-Agnostic: مهما كانت الساعة (Fitbit,
+Strava, Oura, Polar...)، بعد التطبيع تصبح بياناتها بهذه
+الصيغ الموحّدة تمامًا. بقية المشروع لا يرى تفاصيل كل ساعة
+أبدًا — فقط هذه الأنواع.
+
+من يستخدمه؟
+كل ملفات مجلد wearables (adapters, sync, normalize, dedupe,
+والجالبون الأربعة) — لأنهم جميعًا يتعاملون بنفس الصيغ.
+
+ملاحظة:
+ملف "أنواع" فقط — لا يحتوي على كود يُنفَّذ وقت التشغيل،
+باستثناء تعريف الخطأ ProviderNotConfiguredError.
+=================================================
+*/
+
+// ========================================
+// 1. المزودون وبياناتهم التعريفية
+// ========================================
+
 /**
  * طبقة تكامل الساعات الذكية (Wearable Integration Layer)
  * نظام Provider-Agnostic: كل المزودين يُحوَّلون إلى صيغة موحدة هنا.
@@ -20,6 +53,8 @@ export type WearableProviderId =
   | 'strava'
   | 'manual';
 
+// WearableProviderMeta: وصف مزود للعرض في واجهة ربط الأجهزة
+// (الأسماء + هل يتطلب OAuth + هل مُهيأ/متاح + وصف للمستخدم).
 export interface WearableProviderMeta {
   id: WearableProviderId;
   nameAr: string;
@@ -34,6 +69,8 @@ export interface WearableProviderMeta {
   descriptionAr: string;
 }
 
+// ConnectionInfo: شكل "اتصال الجهاز" المحفوظ — المزود وحالته
+// وآخر مزامنة وخطأها والمصدر.
 export interface ConnectionInfo {
   id: string;
   provider: WearableProviderId;
@@ -47,6 +84,12 @@ export interface ConnectionInfo {
   consentAt?: Date | null;
 }
 
+// ========================================
+// 2. الصيغ الموحّدة (بعد التطبيع)
+// ========================================
+
+// UnifiedDailyActivity: "لغة الموقع" للنشاط اليومي — كل المزودين
+// يُحوَّلون إلى هذا الشكل قبل الدخول إلى قاعدة البيانات.
 /** صيغة موحدة لبيانات النشاط اليومي (بعد التطبيع). */
 export interface UnifiedDailyActivity {
   date: Date;
@@ -62,6 +105,8 @@ export interface UnifiedDailyActivity {
   restingHeartRate?: number;
 }
 
+// UnifiedWorkout: "لغة الموقع" لجلسة التدريب — تتضمن بيانات
+// السباحة عند توفرها (لفات، SWOLF، طول المسبح...).
 /** صيغة موحدة لجلسة تدريب (تتضمن بيانات السباحة عند توفرها). */
 export interface UnifiedWorkout {
   startTime: Date;
@@ -81,6 +126,8 @@ export interface UnifiedWorkout {
   confidence?: 'high' | 'medium' | 'estimated';
 }
 
+// ProviderHealthData: "شحنة" البيانات الخام القادمة من المزود
+// (قبل التطبيع) — نشاط وتدريبات ونوم ووزن.
 /** تحميل بيانات أولية من مزود (قبل التطبيع). */
 export interface ProviderHealthData {
   activity?: Partial<UnifiedDailyActivity>[];
@@ -89,6 +136,8 @@ export interface ProviderHealthData {
   weight?: Array<{ date: Date; weightKg: number }>;
 }
 
+// SyncResult: ملخص عملية المزامنة (كم سجل نشاط/تدريب أُدخل
+// + عدد التكرارات + رسالة للمستخدم).
 export interface SyncResult {
   activityUpserted: number;
   workoutsUpserted: number;
@@ -96,6 +145,13 @@ export interface SyncResult {
   message: string;
 }
 
+// ========================================
+// 3. واجهة المحوّل والخطأ الموحّد
+// ========================================
+
+// WearableProviderAdapter: "العقد" الذي يوقّعه كل محوّل —
+// أي مزود جديد يجب أن ينفّذ هذه الدوال الأربع (connect,
+// disconnect, sync, getWorkouts) كي يتكامل مع النظام.
 /** واجهة موحدة لكل مزود — تنفيذها الملموس لكل منصة. */
 export interface WearableProviderAdapter {
   readonly id: WearableProviderId;
@@ -106,6 +162,8 @@ export interface WearableProviderAdapter {
   getWorkouts(token: string): Promise<Record<string, unknown>[]>;
 }
 
+// ProviderNotConfiguredError: خطأ موحّد يُرمى عندما نحاول
+// استعمال مزود لا توجد بيانات اعتماده في البيئة (OAuth).
 /** أخطاء موحدة. */
 export class ProviderNotConfiguredError extends Error {
   constructor(providerId: string) {

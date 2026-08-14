@@ -1,10 +1,73 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/sync.ts
+
+وظيفة الملف:
+"خط المزامنة الموحّد" — الطريق الذي تمر منه كل بيانات الساعات
+قبل أن تدخل قاعدة البيانات، بالترتيب:
+استقبال ← تحقق ← تطبيع ← إزالة تكرار ← حفظ ← إعادة حساب.
+يدعم أي تاريخ (وليس اليوم فقط) لالتقاط البيانات المتأخرة.
+
+لماذا نحتاجه؟
+كل مزود يرسل بياناته بصيغة مختلفة. بدلًا من تكرار منطق
+"التطبيع ثم الحفظ" في كل ملف، لدينا مسار واحد هنا يضمن
+الترتيب نفسه والنتيجة نفسها مهما كان مصدر البيانات.
+
+متى يعمل؟
+- عند كل مزامنة من ساعة (يدوية أو آلية).
+- عند الإدخال اليدوي للنشاط والتدريبات.
+- عند تشغيل المزامنة الدورية (cron).
+
+من يستدعيه؟
+- واجهات API الخاصة بالربط والإدخال اليدوي.
+- سكريبت المزامنة الدورية عبر findDueConnections + runSyncConnection.
+
+الملفات التي يتعامل معها:
+- ./types: الصيغ الموحّدة.
+- ./normalize: التطبيع واستخراج الطاقة وحساب الحمولة.
+- ./dedupe: إزالة التكرار.
+- ./adapters: اختيار المحوّل الصحيح.
+- src/lib/prisma.ts و src/lib/utils.ts و src/lib/crypto.ts.
+- src/lib/nutrition/dynamic.ts: إعادة حساب الهدف اليومي.
+
+ترتيب العمل:
+بيانات خام ← normalizeDailyActivity/normalizeWorkout ←
+extractEnergy ← dedupeWorkouts ← حفظ في القاعدة ←
+recomputeLoad ← recalculateToday
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// prisma: من ملف محلي (src/lib/prisma.ts) — الاتصال بقاعدة البيانات.
 import { prisma } from '@/lib/prisma';
+
+// من ملف محلي src/lib/utils.ts: تاريخ اليوم في منتصف الليل.
 import { startOfToday } from '@/lib/utils';
+
+// من ملف محلي src/lib/crypto.ts: فك تشفير توكن الوصول قبل الاستخدام.
 import { decryptText } from '@/lib/crypto';
+
+// من ملف محلي ./adapters: اختيار المحوّل (المترجم) الصحيح للمزود.
 import { getAdapter } from '@/lib/wearables/adapters';
+
+// من ملف محلي ./types: الصيغ الموحّدة + نتيجة المزامنة.
 import { UnifiedDailyActivity, UnifiedWorkout, ProviderHealthData, SyncResult } from './types';
+
+// من ملف محلي ./normalize: التطبيع + استخراج الطاقة + حساب الحمولة.
 import { normalizeDailyActivity, extractEnergy, normalizeWorkout, computeTrainingLoad } from './normalize';
+
+// من ملف محلي ./dedupe: إزالة التدريبات المكررة.
 import { dedupeWorkouts } from './dedupe';
+
+// من ملف محلي src/lib/nutrition/dynamic.ts: إعادة حساب الهدف
+// الغذائي اليومي بعد تغيّر النشاط.
 import { recalculateToday } from '@/lib/nutrition/dynamic';
 
 /**
@@ -12,17 +75,45 @@ import { recalculateToday } from '@/lib/nutrition/dynamic';
  * يدعم أي تاريخ (وليس اليوم فقط) لالتقاط البيانات المتأخرة من الساعة.
  */
 
+// ========================================
+// 2. دوال مساعدة للحدود الزمنية
+// ========================================
+
+// startOfDay: يعيد بداية اليوم (منتصف الليل) لأي تاريخ.
 function startOfDay(d: Date): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 }
+// endOfDay: يعيد بداية اليوم التالي — نستخدمه كحد "أقل من"
+// لالتقاط كل سجلات اليوم في الاستعلامات.
 function endOfDay(d: Date): Date {
   const x = startOfDay(d);
   x.setDate(x.getDate() + 1);
   return x;
 }
 
+// ========================================
+// 3. إدخال النشاط اليومي
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: ingestActivity (مصدَّرة)
+-----------------------------------------
+وظيفتها: إدخال/تحديث نشاط يوم واحد (يدوي أو من جهاز) عبر
+         خط التطبيع الموحّد، ثم إعادة حساب حمولة اليوم والهدف.
+Input: userId + raw (بيانات النشاط الخام) + provider (المصدر)
+       + date (تاريخ النشاط، الافتراضي اليوم).
+Processing: نطبّع البيانات ونستخرج الطاقة، ثم نحدّث أو نُنشئ
+            سجل dailyActivity (upsert) مع دمج قائمة المصادر،
+            ثم نعيد حساب الحمولة وندعو إعادة حساب الهدف الغذائي.
+Output: SyncResult.
+يستدعيها: واجهات الإدخال اليدوي + ingestProviderData (في نفس الملف).
+ماذا تستدعي: normalizeDailyActivity + extractEnergy + recomputeLoad
+            + ingestWorkouts + recalculateToday + prisma.
+-----------------------------------------
+*/
 /** إدخال نشاط يومي (يدوي أو من جهاز) عبر خط التطبيع الموحّد. */
 export async function ingestActivity(
   userId: string,
@@ -85,6 +176,29 @@ export async function ingestActivity(
   return result;
 }
 
+// ========================================
+// 4. إدخال التدريبات مع إزالة التكرار
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: ingestWorkouts (مصدَّرة)
+-----------------------------------------
+وظيفتها: إدخال قائمة تدريبات (يدوي أو من جهاز) مع إزالة
+         التكرار — لأي نافذة تاريخ.
+Input: userId + rawList (التدريبات الخام) + provider + existing
+       (اختياري — تدريبات معروفة مسبقًا لتجنب استعلام إضافي).
+Processing: نطبّع كل تمرين، نحدد نافذة البحث عن التكرار، ثم
+            نمرر على dedupeWorkouts. التدريبات الجديدة تُحفظ
+            في workoutSession (وبعضها أيضًا في trainingLogEntry
+            للسباحة والجيم — مع تجاهل أي تعارض)، ثم نعيد حساب
+            الحمولة للأيام المتأثرة.
+Output: SyncResult (عدد ما أُدرج + عدد التكرارات المستبعدة).
+يستدعيها: ingestActivity و ingestProviderData (في نفس الملف) +
+          واجهات الإدخال اليدوي.
+ماذا تستدعي: normalizeWorkout + dedupeWorkouts + recomputeLoad + prisma.
+-----------------------------------------
+*/
 /** إدخال قائمة تدريبات (يدوي أو من جهاز) مع إزالة التكرار — لأي نافذة تاريخ. */
 export async function ingestWorkouts(
   userId: string,
@@ -157,6 +271,25 @@ export async function ingestWorkouts(
   return { activityUpserted: 0, workoutsUpserted: created, duplicated, message: `تمت مزامنة ${created} تمرين${created !== 1 ? 'ات' : ''}.` };
 }
 
+// ========================================
+// 5. إدخال حزمة بيانات كاملة من مزود
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: ingestProviderData (مصدَّرة)
+-----------------------------------------
+وظيفتها: إدخال حزمة بيانات كاملة قادمة من مزود (نشاط لكل يوم
+         + تدريبات + وزن) — تُستخدم من المزامنة الآلية.
+Input: userId + data (ProviderHealthData) + provider.
+Processing: نمر على أيام النشاط (لكل يوم ingestActivity)، ثم
+            التدريبات (ingestWorkouts)، ثم الوزن (تحديث أو إنشاء
+            سجل وزن يومي)، ثم نعيد حساب الهدف الغذائي.
+Output: SyncResult موحّد مع رسالة ملخص.
+يستدعيها: sync.ts نفسها (في runSyncConnection).
+ماذا تستدعي: ingestActivity + ingestWorkouts + recalculateToday + prisma.
+-----------------------------------------
+*/
 /** إدخال حزمة بيانات كاملة من مزود (نشاط + تدريبات + نوم + وزن) — يُستخدم من المزامنة الآلية. */
 export async function ingestProviderData(
   userId: string,
@@ -197,6 +330,25 @@ export async function ingestProviderData(
   return { activityUpserted, workoutsUpserted, duplicated, message };
 }
 
+// ========================================
+// 6. إعادة حساب الحمولة وسجل المزامنة
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: recomputeLoad (داخلية — غير مصدَّرة)
+-----------------------------------------
+وظيفتها: إعادة حساب تحميل التدريب ليوم محدد من التدريبات
+         والنشاط المحفوظ، وتحديث الحقول في dailyActivity.
+Input: userId + date.
+Processing: نجلب النشاط والتدريبات لذلك اليوم، نبني صيغة موحّدة،
+            نحسب computeTrainingLoad، ثم نحدّث الحمولة ودقائق
+            التدريب وسعرات التدريب.
+Output: void (تحديث في القاعدة فقط).
+يستدعيها: ingestActivity و ingestWorkouts (في نفس الملف).
+ماذا تستدعي: computeTrainingLoad + prisma.
+-----------------------------------------
+*/
 /** إعادة حساب تحميل التدريب ليوم محدد من التدريبات والنشاط المحفوظ. */
 async function recomputeLoad(userId: string, date: Date) {
   const day = startOfDay(date);
@@ -230,6 +382,18 @@ async function recomputeLoad(userId: string, date: Date) {
   });
 }
 
+/*
+-----------------------------------------
+الدالة: logSync (مصدَّرة)
+-----------------------------------------
+وظيفتها: حفظ سجل المزامنة (نجاح/فشل) في قاعدة البيانات.
+Input: userId + provider + status + items + message اختياري + durationMs اختياري.
+Processing: نحفظ سجلًا جديدًا في syncLog؛ أي فشل يُتجاهل حتى
+            لا يكسر سير العمل.
+Output: void.
+يستدعيها: runSyncConnection (في نفس الملف).
+-----------------------------------------
+*/
 /** حفظ سجل المزامنة. */
 export async function logSync(userId: string, provider: string, status: string, items: number, message?: string, durationMs?: number) {
   try {
@@ -239,6 +403,25 @@ export async function logSync(userId: string, provider: string, status: string, 
   }
 }
 
+// ========================================
+// 7. المزامنة الآلية للاتصالات
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: findDueConnections (مصدَّرة)
+-----------------------------------------
+وظيفتها: إيجاد الاتصالات "المستحقة" للمزامنة (جهاز فعلي،
+         غير يدوي) — للمستخدم الواحد أو للجميع.
+Input: userId اختياري (بدونه نعالج الكل) + maxAgeMs (أقدم مدة
+       مسموحة منذ آخر مزامنة، الافتراضي 15 دقيقة).
+Processing: نجلب الاتصالات المتصلة ثم نفلتر من لم يُزامن بعد
+            أو مزامنته أقدم من المسموح.
+Output: قائمة الاتصالات المستحقة.
+يستدعيها: سكريبت المزامنة الدورية (cron).
+ماذا تستدعي: prisma.
+-----------------------------------------
+*/
 /** الاتصالات المستحقة للمزامنة (جهاز فعلي) — للمستخدم أو للجميع. */
 export async function findDueConnections(userId?: string, maxAgeMs = 15 * 60 * 1000) {
   const conns = await prisma.wearableConnection.findMany({
@@ -251,6 +434,21 @@ export async function findDueConnections(userId?: string, maxAgeMs = 15 * 60 * 1
   return conns.filter((c) => !c.lastSyncAt || now - c.lastSyncAt.getTime() > maxAgeMs);
 }
 
+/*
+-----------------------------------------
+الدالة: runSyncConnection (مصدَّرة)
+-----------------------------------------
+وظيفتها: تشغيل مزامنة كاملة لاتصال واحد وحفظ النتيجة.
+Input: conn (اتصال من القاعدة: id, userId, provider, accessToken).
+Processing: نفك تشفير التوكن (قد يرمي خطأ "أعد الربط")، نختار
+            المحوّل ونستدعي sync ثم ingestProviderData، ثم نحدّث
+            وقت آخر مزامنة، ونسجّل النجاح. عند أي خطأ نحدّث
+            lastSyncError ونسجّل الفشل.
+Output: { provider, ok, message }.
+يستدعيها: سكريبت المزامنة الدورية وواجهات المزامنة اليدوية.
+ماذا تستدعي: decryptText + getAdapter + ingestProviderData + logSync + prisma.
+-----------------------------------------
+*/
 /** تشغيل مزامنة كاملة لاتصال واحد وحفظ النتيجة. */
 export async function runSyncConnection(conn: { id: string; userId: string; provider: string; accessToken: string | null }): Promise<{ provider: string; ok: boolean; message: string }> {
   const started = Date.now();

@@ -116,10 +116,25 @@ export class StravaAdapter implements WearableProviderAdapter {
     return { status: 'redirect', url: `${STRAVA_AUTH}/authorize?${params.toString()}` };
   }
 
+  // disconnect: Strava لا يملك مسارًا موحّدًا للإلغاء —
+  // يُترك الإلغاء يدويًا لدى Strava.
   async disconnect(_userId: string): Promise<void> {
     return undefined;
   }
 
+  /*
+  -----------------------------------------
+  الدالة الداخلية: refreshIfNeeded
+  -----------------------------------------
+  وظيفتها: التأكد أن التوكن ساري، وتجديده تلقائيًا عند قرب انتهائه.
+  Input: conn (الاتصال المحفوظ مع توكناته المشفرة).
+  Processing: إن بقي أقل من 5 دقائق نطلب توكنًا جديدًا من Strava
+              (باستخدام التوكن المنعّش) ثم نحفظ الجديد مشفّرًا.
+  Output: توكن وصول ساري.
+  يستدعيها: sync (في نفس الصنف).
+  ماذا تستدعي: decryptText/encryptText + prisma + fetch.
+  -----------------------------------------
+  */
   private async refreshIfNeeded(conn: {
     id: string;
     accessToken: string | null;
@@ -162,6 +177,20 @@ export class StravaAdapter implements WearableProviderAdapter {
     return data.access_token;
   }
 
+  /*
+  -----------------------------------------
+  الدالة: getWorkouts
+  -----------------------------------------
+  وظيفتها: جلب آخر 30 يومًا من التدريبات (مع تفاصيل السباحة).
+  Input: token (توكن وصول ساري).
+  Processing: نطلب قائمة النشاطات (حتى 100)، ولكل نشاط سباحة
+              نجلب التفاصيل (لفات/SWOLF/طول المسبح) من مسار
+              النشاط الواحد، ثم نترجم كل شيء عبر mapStravaActivity.
+  Output: قائمة بالصيغة الموحّدة.
+  يستدعيها: sync (في نفس الصنف) وأي مسار يطلب التدريبات.
+  ماذا تستدعي: stravaGet + mapStravaActivity.
+  -----------------------------------------
+  */
   /** جلب آخر ٣٠ يومًا من التدريبات (مع تفاصيل السباحة). */
   async getWorkouts(token: string): Promise<Record<string, unknown>[]> {
     const after = Math.floor((Date.now() - 30 * 24 * 3600 * 1000) / 1000);
@@ -189,6 +218,20 @@ export class StravaAdapter implements WearableProviderAdapter {
     return workouts;
   }
 
+  /*
+  -----------------------------------------
+  الدالة: sync
+  -----------------------------------------
+  وظيفتها: مزامنة شاملة — تدريبات آخر 7 أيام تُمرَّر لخط التطبيع.
+  Input: userId + التوكن (نهمله لأننا نقرأ من القاعدة).
+  Processing: نجلب الاتصال المحفوظ ونضمن توكنًا ساريًا، ثم نجلب
+              نشاطات آخر 7 أيام (مع تفاصيل السباحة) ونترجمها.
+  Output: ProviderHealthData (تدريبات فقط — Strava لا توفر
+          نشاطًا يوميًا شاملاً بنفس الدقة).
+  يستدعيها: sync.ts عبر runSyncConnection.
+  ماذا تستدعي: refreshIfNeeded + stravaGet + mapStravaActivity.
+  -----------------------------------------
+  */
   /** مزامنة شاملة: تدريبات آخر ٧ أيام → تُمرَّر لخط التطبيع. */
   async sync(userId: string, token: string | null): Promise<ProviderHealthData> {
     const conn = await prisma.wearableConnection.findFirst({
