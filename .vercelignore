@@ -1,0 +1,8 @@
+mobile
+android-sdk
+.next
+node_modules
+.git
+.env
+.env.local
+*.md
