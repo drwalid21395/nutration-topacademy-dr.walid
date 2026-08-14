@@ -1,10 +1,60 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/services/supplements/eligibility.ts
+
+وظيفة الملف:
+"محرك الأهلية للمكملات" — يُشغَّل قبل أي حساب أو توصية. يفحص:
+العمر، الحالة الصحية، الأدوية، التكرار بين المكملات، قرب البطولة،
+قوانين مكافحة المنشطات، وموافقة ولي الأمر للقاصرين.
+
+لماذا نحتاجه؟
+حتى لا نقترح مكملًا غير مناسب لعمر السباح أو حالته الصحية أو
+قريبًا من بطولته — فالأمان يأتي قبل التوصية.
+
+متى يعمل؟
+داخل generateSupplementAssessment (assessment.ts) لكل مكمل "مستجيب"
+عبر runEligibility.
+
+من يستدعي هذا الملف؟
+- supplements/assessment.ts → runEligibility + EligibilityProfile.
+
+الملفات التي يتعامل معها:
+- ./types → EligibilityContext, EligibilityResult (الأنواع).
+- ./profiles → بيانات المكمل التي تُفحص (تُمرَّر من الملف المستدعي).
+
+ترتيب العمل:
+سياق الأهلية (EligibilityContext) + بيانات المكمل ↓
+فحوصات متتالية: دليل علمي ← عجز غذائي ← عمر ← موانع صحية ←
+تداخل دوائي ← أمان البطولة/المنشطات ← تحليل مخبري ← إشراف طبي ↓
+إصدار verdict + أسباب + أعلام (flags)
+
+ملاحظة مهمة:
+النتائج استرشادية أمانية وليست وصفات — تُرجع أسبابًا واضحة
+يقرأها المستخدم والمختص قبل أي قرار.
+==================================================
+*/
+
 /**
  * محرك الأهلية للمكملات — يُشغَّل قبل أي حساب أو توصية.
  * يفحص العمر، الحالة الصحية، الأدوية، التكرار بين المكملات،
  * قرب البطولة، قوانين مكافحة المنشطات، وموافقة ولي الأمر للقاصرين.
  */
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// الأنواع المشتركة بين وحدات المكملات (استيراد أنواع فقط).
 import type { EligibilityContext, EligibilityResult } from './types';
 
+// ========================================
+// 2. الأنواع
+// ========================================
+
+// ملف بيانات مكمل واحد — كل حقوله تُفحص في محرك الأهلية.
 export interface EligibilityProfile {
   key: string;
   nameAr: string;
@@ -25,12 +75,43 @@ export interface EligibilityProfile {
   evidenceWeak?: boolean;
 }
 
+// ========================================
+// 3. أدوات مساعدة
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: textMatches
+-----------------------------------------
+وظيفتها: فحص نص حر (مثل الحالات الصحية أو الأدوية) بحثًا عن أي
+كلمة من قائمة معينة، بأسلوب غير حساس لحالة الحروف.
+Input: نص قد يكون null/undefined + قائمة كلمات.
+Processing: تحويل النص لأحرف صغيرة ثم البحث عن كل كلمة.
+Output: true إن وُجدت أي كلمة من القائمة.
+-----------------------------------------
+*/
 function textMatches(text: string | null | undefined, needles: string[]): boolean {
   if (!text) return false;
   const t = text.toLowerCase();
   return needles.some((n) => t.includes(n));
 }
 
+// ========================================
+// 4. دوال الفحص
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: checkAgeEligibility
+-----------------------------------------
+وظيفتها: فحص عمر السباح (وهل هو قاصر) مقابل شروط المكمل.
+Input: بيانات المكمل + سياق الأهلية.
+Processing: إذا كان قاصرًا: منع الممنوعات (كافيين/منبهات/حوارق دهون)؛
+  وفي غيرها: اشتراط صلاحية المكمل للقاصرين ثم موافقة ولي الأمر؛
+  وأخيرًا مقارنة العمر بالحد الأدنى إن وُجد.
+Output: ok / verdict / reason / هل يحتاج موافقة ولي الأمر؟
+-----------------------------------------
+*/
 export function checkAgeEligibility(
   profile: EligibilityProfile,
   ctx: EligibilityContext
@@ -53,6 +134,18 @@ export function checkAgeEligibility(
   return { ok: true, verdict: 'suitable', reason: 'العمر مناسب.', needsGuardian: false };
 }
 
+/*
+-----------------------------------------
+الدالة: checkMedicalContraindications
+-----------------------------------------
+وظيفتها: البحث عن موانع صحية: أمراض الكلى/القلب/الكبد، الحمل،
+تاريخ اضطرابات الأكل، حساسية ذات صلة، والمكملات التي تتطلب وصفة.
+Input: بيانات المكمل + سياق الأهلية.
+Processing: مطابقة الكلمات المفتاحية مع فئات المكملات
+  (كرياتين/بروتين/كهارل مع الكلى، كافيين/كهارل مع القلب...).
+Output: ok / verdict / reason / هل يحتاج طبيبًا؟
+-----------------------------------------
+*/
 export function checkMedicalContraindications(
   profile: EligibilityProfile,
   ctx: EligibilityContext
@@ -95,6 +188,17 @@ export function checkMedicalContraindications(
   return { ok: true, verdict: 'suitable', reason: 'لا موانع صحية واضحة في الملف.', needsDoctor: false };
 }
 
+/*
+-----------------------------------------
+الدالة: checkMedicationInteractions
+-----------------------------------------
+وظيفتها: كشف التداخل المحتمل بين المكمل والأدوية المسجلة.
+Input: بيانات المكمل + سياق الأهلية (حقل الأدوية).
+Processing: جدول أدوية مع مكملات متعارضة؛ لكل صف، إن كان المكمل
+  الحالي هو المستهدف ونص الأدوية يحتوي كلمة من القائمة → تداخل.
+Output: ok / verdict / reason / هل يحتاج طبيبًا؟
+-----------------------------------------
+*/
 export function checkMedicationInteractions(
   profile: EligibilityProfile,
   ctx: EligibilityContext
@@ -124,6 +228,18 @@ export function checkMedicationInteractions(
   return { ok: true, verdict: 'suitable', reason: 'لا تداخل دوائي معروف حسب البيانات المدخلة.', needsDoctor: false };
 }
 
+/*
+-----------------------------------------
+الدالة: checkDuplicateIngredients
+-----------------------------------------
+وظيفتها: فحص تكرار مكوّن في عدة منتجات (منتجات السباح الحالية)
+مع حساب إجمالي كميته ومقارنته بالحد الأعلى إن وُجد.
+Input: اسم المكوّن + سياق الأهلية + حد أعلى اختياري.
+Processing: تجميع المطابقات بالاسم، جمع الكميات، ومقارنة الإجمالي
+  بالحد (تجاوز / اقتراب / طبيعي).
+Output: هل يوجد تكرار + الكمية الإجمالية + الوحدة + الحالة + رسالة.
+-----------------------------------------
+*/
 export function checkDuplicateIngredients(
   ingredientName: string,
   ctx: EligibilityContext,
@@ -152,6 +268,18 @@ export function checkDuplicateIngredients(
   return { duplicate: true, totalAmount, unit, status: 'ok', message: `إجمالي ${ingredientName} الحالي ${totalAmount} ${unit}.` };
 }
 
+/*
+-----------------------------------------
+الدالة: checkCompetitionSafety
+-----------------------------------------
+وظيفتها: أمان المكمل قرب البطولة ووفق لوائح مكافحة المنشطات.
+Input: بيانات المكمل + سياق الأهلية.
+Processing: قرب بطولة (أقل من 7 أيام) + مكمل مرتبط بالمنافسة ← منع
+  تجريب مكملات جديدة؛ dopingRisk محظور ← منع؛ خطر تلوث عالٍ/متوسط ←
+  طلب منتج مختبر من جهة مستقلة.
+Output: ok / verdict / reason.
+-----------------------------------------
+*/
 export function checkCompetitionSafety(
   profile: EligibilityProfile,
   ctx: EligibilityContext
@@ -170,6 +298,26 @@ export function checkCompetitionSafety(
   return { ok: true, verdict: 'suitable', reason: 'آمن بالنسبة لقرب البطولة ومكافحة المنشطات حسب المتاح.' };
 }
 
+// ========================================
+// 5. الدالة الرئيسية (تشغيل المحرك)
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: runEligibility
+-----------------------------------------
+وظيفتها: تشغيل محرك الأهلية الكامل لمكمل واحد بالترتيب.
+Input: بيانات المكمل + سياق الأهلية.
+Processing:
+  1. دليل علمي ضعيف ← high-risk.
+  2. لا عجز غذائي حقيقي ← food-sufficient (الغذاء أولًا).
+  3. فحوصات متتالية (عمر، موانع صحية، تداخل دوائي، أمان البطولة).
+  4. تحليل مخبري مطلوب وليس متوفرًا ← needs-lab.
+  5. إشراف طبي مطلوب ← needs-doctor (مسموح مع الإشراف).
+Output: EligibilityResult (verdict + reasons + flags).
+يُستدعى من: assessment.ts لكل مكمل مستجيب.
+-----------------------------------------
+*/
 /** تشغيل محرك الأهلية الكامل لمكمل واحد */
 export function runEligibility(profile: EligibilityProfile, ctx: EligibilityContext): EligibilityResult {
   const flags = { needsGuardian: false, needsLab: false, needsDoctor: false, competitionRestricted: false, dopingRestricted: false };

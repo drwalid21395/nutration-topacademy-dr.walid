@@ -1,3 +1,20 @@
+/*
+=================================================
+ملف اختبار (Test) — تحويلات Fitbit
+=================================================
+يختبر دوال fitbit-mapping.ts (تصنيف الرياضة، تحويل المدة
+والمسافة، وتحميل النشاط/النوم/النبض/التدريب).
+اسم الملف:
+src/lib/wearables/fitbit-mapping.test.ts
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// describe/it/expect: من vitest (مكتبة اختبارات خارجية).
+// الدوال: من الملف المحلي ./fitbit-mapping (الهدف من الاختبار).
 import { describe, it, expect } from 'vitest';
 import {
   mapFitbitSport,
@@ -8,6 +25,10 @@ import {
   mapFitbitHeart,
   mapFitbitWorkout,
 } from './fitbit-mapping';
+
+// ========================================
+// 2. اختبار تصنيف الرياضة
+// ========================================
 
 describe('mapFitbitSport', () => {
   it('classifies swimming', () => {
@@ -23,6 +44,10 @@ describe('mapFitbitSport', () => {
   });
 });
 
+// ========================================
+// 3. اختبار تحويل المدة
+// ========================================
+
 describe('parseFitbitDuration', () => {
   it('converts ms to minutes', () => {
     expect(parseFitbitDuration(1800000)).toBe(30);
@@ -34,6 +59,10 @@ describe('parseFitbitDuration', () => {
   });
 });
 
+// ========================================
+// 4. اختبار تحويل المسافة
+// ========================================
+
 describe('fitbitDistanceToMeters', () => {
   it('converts km to meters', () => {
     expect(fitbitDistanceToMeters(1.5)).toBe(1500);
@@ -42,6 +71,10 @@ describe('fitbitDistanceToMeters', () => {
     expect(fitbitDistanceToMeters(null)).toBeUndefined();
   });
 });
+
+// ========================================
+// 5. اختبار تحويل نشاط اليوم
+// ========================================
 
 describe('mapFitbitActivitySummary', () => {
   it('maps steps, calories and distance', () => {
@@ -63,6 +96,10 @@ describe('mapFitbitActivitySummary', () => {
   });
 });
 
+// ========================================
+// 6. اختبار استخراج النوم
+// ========================================
+
 describe('mapFitbitSleep', () => {
   it('extracts sleep minutes and resting HR', () => {
     const out = mapFitbitSleep({ summary: { totalMinutesAsleep: 420, restingHeartRate: 52 } });
@@ -71,12 +108,20 @@ describe('mapFitbitSleep', () => {
   });
 });
 
+// ========================================
+// 7. اختبار استخراج نبض الراحة
+// ========================================
+
 describe('mapFitbitHeart', () => {
   it('extracts resting heart rate', () => {
     const out = mapFitbitHeart({ 'activities-heart': [{ value: { restingHeartRate: 51 } }] });
     expect(out.restingHeartRate).toBe(51);
   });
 });
+
+// ========================================
+// 8. اختبار تحويل التمرين
+// ========================================
 
 describe('mapFitbitWorkout', () => {
   it('maps a swim session', () => {

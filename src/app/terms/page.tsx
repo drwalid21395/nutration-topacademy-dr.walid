@@ -1,9 +1,62 @@
-import { Navbar } from '@/components/layout/navbar';
-import { Footer } from '@/components/layout/footer';
-import { getCurrentUser } from '@/lib/auth';
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
 
+اسم الملف:
+src/app/terms/page.tsx
+
+وظيفة الملف:
+صفحة "شروط الاستخدام" (المسار /terms) — صفحة ثابتة
+تعرض 8 أقسام من الشروط: القبول، الاستخدام المسموح،
+الإخلاء الطبي، دقة البيانات، المكملات، الحسابات
+والأدوار، تعديل الخدمة، والملكية الفكرية.
+
+لماذا نحتاجه؟
+الالتزام القانوني: المستخدم يوافق عليها عند إنشاء الحساب
+(في صفحة التسجيل).
+
+نوعها: Server Component (بدون 'use client') — محتوى
+ثابت بلا بيانات متغيرة.
+
+متى يعمل؟
+عند فتح /terms (من التسجيل أو التذييل).
+
+من يستدعي هذا الملف؟
+Next.js يعرضه تلقائيًا لأي زيارة للمسار.
+
+الملفات التي يتعامل معها:
+- Navbar من components/layout/navbar و Footer من components/layout/footer.
+- getCurrentUser من lib/auth.
+
+ترتيب العمل:
+1. معرفة المستخدم الحالي (لشكل القائمة).
+2. عرض العنوان وتاريخ التحديث.
+3. عرض الأقسام الثمانية مرقّمة من مصفوفة SECTIONS.
+==================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+import { Navbar } from '@/components/layout/navbar'; // الشريط العلوي — ملف محلي.
+import { Footer } from '@/components/layout/footer'; // التذييل — ملف محلي.
+import { getCurrentUser } from '@/lib/auth'; // دالة محلية: المستخدم المسجل حاليًا.
+
+// ========================================
+// 2. بيانات التعريف
+// ========================================
+
+// metadata: عنوان الصفحة في تبويب المتصفح.
 export const metadata = { title: 'شروط الاستخدام' };
 
+// ========================================
+// 3. الثوابت (أقسام الشروط)
+// ========================================
+
+// SECTIONS: مصفوفة (Array) فيها أقسام الشروط الثمانية.
+// كل كائن: العنوان title ونص الفقرة body. نرسمها بحلقة map.
 const SECTIONS = [
   {
     title: 'القبول',
@@ -39,17 +92,25 @@ const SECTIONS = [
   },
 ];
 
+// ========================================
+// 4. الصفحة الرئيسية (تعمل في الخادم)
+// ========================================
+
+// TermsPage: الدالة الرئيسية للصفحة (تعمل في الخادم).
 export default async function TermsPage() {
+  // المستخدم الحالي (لشكل القائمة العلوية فقط).
   const user = await getCurrentUser();
 
   return (
     <>
+      {/* الشريط العلوي. */}
       <Navbar isLoggedIn={!!user} user={user} />
       <main className="water-bg">
         <section className="container-app py-16">
           <div className="mx-auto max-w-3xl">
             <h1 className="text-3xl font-black text-ocean-900">شروط الاستخدام</h1>
             <p className="mt-2 text-sm text-slate-500">آخر تحديث: يوليو 2026</p>
+            {/* الأقسام: map على SECTIONS، i+1 يرسم رقم القسم تلقائيًا. */}
             <div className="mt-8 space-y-6">
               {SECTIONS.map((s, i) => (
                 <div key={s.title}>
@@ -61,6 +122,7 @@ export default async function TermsPage() {
           </div>
         </section>
       </main>
+      {/* التذييل. */}
       <Footer />
     </>
   );

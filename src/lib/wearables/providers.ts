@@ -1,3 +1,43 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/providers.ts
+
+وظيفة الملف:
+"سجل المزودين" (Provider Registry) — يحوي قائمة كل منصات
+الساعات المدعومة (أسماؤها ووصفها)، وأسماء متغيرات البيئة
+اللازمة لكل منها، ودوالًا تعرف هل المزود "مُهيأ" (توجد بيانات
+اعتماده في البيئة) و"متاح" للربط أم لا.
+
+لماذا نحتاجه؟
+حتى لا نكتب قائمة الساعات في كل ملف، وأهم من ذلك: لا نفترض
+ربطًا وهميًا. أي مزود بلا بيانات اعتماد يظهر «قريبًا» أو
+يُوجَّه عبر Aggregator رسمي (Health Connect / Apple Health).
+
+متى يعمل؟
+عند عرض صفحة ربط الأجهزة، وعند بناء رابط الإذن في adapters.ts.
+
+من يستدعيه؟
+- src/lib/wearables/adapters.ts (isProviderConfigured / getProviderEnv).
+- صفحات وواجهات API الخاصة بربط الأجهزة (PROVIDERS / getProviderMeta).
+
+الملفات التي يتعامل معها:
+- ./types: WearableProviderId و WearableProviderMeta.
+
+ترتيب العمل:
+PROVIDERS (القائمة) ← getProviderMeta (يتحقق من البيئة) ←
+isProviderConfigured / getProviderEnv للمعالجة
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// من ملف محلي ./types: معرّف المزود ووصفه التعريفي.
 import { WearableProviderId, WearableProviderMeta } from './types';
 
 /**
@@ -6,6 +46,15 @@ import { WearableProviderId, WearableProviderMeta } from './types';
  * أي مزود بلا بيانات اعتماد يظهر «قريبًا» أو يُوجَّه عبر Aggregator رسمي (Health Connect / Apple Health).
  */
 
+// ========================================
+// 2. أسماء متغيرات البيئة لكل مزود
+// ========================================
+
+// ProviderEnv: كيف نجد بيانات اعتماد المزود في البيئة؟
+// clientIdEnv: اسم متغير الـ Client ID (مثل FITBIT_CLIENT_ID).
+// clientSecretEnv: اسم متغير السر (اختياري).
+// viaAggregator: إن وُجد، فالجهاز يمر عبر "مزود وسيط رسمي"
+// (مثل Health Connect أو Apple Health) ولا يُربط مباشرة بالمتصفح.
 interface ProviderEnv {
   clientIdEnv: string;
   clientSecretEnv?: string;
@@ -13,6 +62,9 @@ interface ProviderEnv {
   viaAggregator?: string;
 }
 
+// ENV: قاموس يربط اسم المزود بأسماء متغيرات البيئة الخاصة به.
+// ملاحظة: honor يستخدم نفس متغيرات huawei (نفس المنصة خلف الكواليس)،
+// و manual لا يحتاج أي متغيرات (clientIdEnv فارغ).
 const ENV: Record<string, ProviderEnv> = {
   appleHealth: { clientIdEnv: 'APPLE_HEALTH_CLIENT_ID', viaAggregator: 'Apple Health' },
   healthConnect: { clientIdEnv: 'HEALTH_CONNECT_CLIENT_ID', viaAggregator: 'Android Health Connect' },
@@ -30,6 +82,14 @@ const ENV: Record<string, ProviderEnv> = {
   manual: { clientIdEnv: '' },
 };
 
+// ========================================
+// 3. القائمة العامة للمزودين
+// ========================================
+
+// PROVIDERS: قائمة كل المزودين ببيانات العرض (اسم عربي/إنجليزي
+// + هل يتطلب OAuth + وصف للمستخدم). الحقول configured/available
+// تُحدَّث لاحقًا في getProviderMeta حسب البيئة، وهي هنا قيم
+// ابتدائية ثابتة.
 export const PROVIDERS: WearableProviderMeta[] = [
   { id: 'appleHealth', nameAr: 'Apple Health', nameEn: 'Apple Health', requiresOAuth: true, configured: false, available: false, descriptionAr: 'لأجهزة Apple Watch — يُربط حاليًا عبر تطبيق Apple Health على آيفون، ويتطلب تطبيق موبايل (HealthKit) لاستيراد البيانات.' },
   { id: 'healthConnect', nameAr: 'Health Connect (أندرويد)', nameEn: 'Health Connect', requiresOAuth: true, configured: false, available: false, descriptionAr: 'المجمّع الرسمي لأنظمة أندرويد (Galaxy Watch و Pixel Watch و Xiaomi وغيرها) — يتطلب تطبيق موبايل لقراءة البيانات.' },
@@ -47,6 +107,25 @@ export const PROVIDERS: WearableProviderMeta[] = [
   { id: 'manual', nameAr: 'إدخال يدوي', nameEn: 'Manual entry', requiresOAuth: false, configured: true, available: true, descriptionAr: 'بديل متاح دائمًا — سجّل نشاطك وتدريباتك بنفسك دون أي ربط.' },
 ];
 
+// ========================================
+// 4. دوال الاستعلام عن المزودين
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: getProviderMeta (مصدَّرة)
+-----------------------------------------
+وظيفتها: إرجاع وصف مزود مع حساب حالته الحقيقية (configured/available).
+Input: id (اسم المزود).
+Processing: نبحث في PROVIDERS؛ إن لم يوجد نبني وصفًا عامًا بسيطًا.
+            ثم نحدد configured من وجود متغيرات البيئة، و available
+            بـ: الإدخال اليدوي دائمًا متاح، والمزود متاح عندما يكون
+            مُهيأً ولا يحتاج Aggregator وسيطًا.
+Output: WearableProviderMeta.
+يستدعيها: صفحات/واجهات ربط الأجهزة.
+ماذا تستدعي: ENV و process.env.
+-----------------------------------------
+*/
 export function getProviderMeta(id: string): WearableProviderMeta {
   const meta = PROVIDERS.find((p) => p.id === id);
   if (!meta) return {
@@ -65,6 +144,18 @@ export function getProviderMeta(id: string): WearableProviderMeta {
   return { ...meta, configured, available };
 }
 
+/*
+-----------------------------------------
+الدالة: isProviderConfigured (مصدَّرة)
+-----------------------------------------
+وظيفتها: هل المزود "مُهيأ" (توجد بيانات اعتماده في البيئة)؟
+Input: id.
+Processing: إن لم يكن في سجل ENV → false. إن كان لا يحتاج Client ID
+            (manual) → true. وإلا نتحقق من وجود المتغير.
+Output: boolean.
+يستدعيها: adapters.ts (قبل بناء رابط الإذن).
+-----------------------------------------
+*/
 export function isProviderConfigured(id: string): boolean {
   const env = ENV[id];
   if (!env) return false;
@@ -72,6 +163,15 @@ export function isProviderConfigured(id: string): boolean {
   return Boolean(process.env[env.clientIdEnv]);
 }
 
+/*
+-----------------------------------------
+الدالة: getProviderEnv (مصدَّرة)
+-----------------------------------------
+وظيفتها: إرجاع إعدادات البيئة الخاصة بمزود.
+Output: ProviderEnv أو undefined.
+يستدعيها: adapters.ts (لقراءة أسماء متغيرات Client ID).
+-----------------------------------------
+*/
 export function getProviderEnv(id: string): ProviderEnv | undefined {
   return ENV[id];
 }

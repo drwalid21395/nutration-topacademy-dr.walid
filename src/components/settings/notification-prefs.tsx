@@ -1,12 +1,69 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/settings/notification-prefs.tsx
+
+وظيفة الملف:
+إعدادات الإشعارات — صفحة تحكم كاملة في التذكيرات:
+- مواعيد تذكير الوجبات (فطور/غداء/عشاء) + قبل/بعد التمرين.
+- تذكير الوزن اليومي وموعد النوم.
+- الفاصل الزمني للتذكير بالماء (كل كم دقيقة).
+- أيام عمل التذكيرات (أزرار أيام الأسبوع).
+- تفضيلات عامة: Push، إشعارات داخل التطبيق، تنبيهات ذكية، صوت.
+- ساعات الهدوء وتذكيرات البطولة والمراجعة.
+
+لماذا نحتاجه؟
+بدون هذه الصفحة لا يمكن للمستخدم تخصيص وقت وتكرار
+التذكيرات — وهي الميزة التي تجعله ملتزمًا.
+
+'use client':
+يعمل في المتصفح لأنه يستخدم useState وuseEffect ونماذج.
+
+متى يعمل؟
+عند فتح /settings.
+
+من يستدعي هذا الملف؟
+src/app/settings/page.tsx.
+
+الملفات التي يتعامل معها:
+- API: /api/notification-prefs (GET جلب، PUT حفظ).
+- مكونات: Button، Input/Select/Toggle/Field، Card، Alert، Badge.
+- MEAL_TYPES من lib/constants (أسماء الوجبات).
+
+ترتيب العمل:
+1. نجلب الإعدادات الحالية من الخادم ↓
+2. نعرض النماذج مع القيم المحفوظة ↓
+3. المستخدم يعدّل (مواعيد، أيام، مفاتيح تفعيل) ↓
+4. زر حفظ → PUT لكامل النموذج ↓
+5. نجاح → رسالة "تم حفظ الإعدادات"
+==================================================
+*/
+
 'use client';
 
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// useEffect (جلب أولي)، useState (حالة متغيرة).
 import { useEffect, useState } from 'react';
+// أيقونات: جرس، حفظ، صح.
 import { Bell, Save, Check } from 'lucide-react';
+// مكونات الواجهة.
 import { Button } from '@/components/ui/button';
 import { Input, Select, Toggle, Field } from '@/components/ui/forms';
 import { Card, Alert, Badge } from '@/components/ui';
+// MEAL_TYPES: أسماء الوجبات (فطور، غداء، عشاء).
 import { MEAL_TYPES } from '@/lib/constants';
 
+// ========================================
+// 2. بيانات ثابتة
+// ========================================
+
+// TIMES: كل أوقات اليوم المتاحة للاختيار (من 6 صباحًا لـ 11 مساءً).
 const TIMES = [
   '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
   '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
@@ -14,6 +71,7 @@ const TIMES = [
   '21:00', '21:30', '22:00', '22:30', '23:00',
 ];
 
+// DAYS: أيام الأسبوع (السبت أولًا — التقويم المصري).
 const DAYS = [
   { key: 'sat', label: 'السبت' },
   { key: 'sun', label: 'الأحد' },
@@ -24,13 +82,20 @@ const DAYS = [
   { key: 'fri', label: 'الجمعة' },
 ];
 
+// ========================================
+// 3. المكوّن الرئيسي: NotificationPrefs
+// ========================================
+
 export function NotificationPrefs() {
+  // form: كائن واحد يحمل كل الإعدادات (نحدّث حقوله جزئيًا).
   const [form, setForm] = useState<any>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // عند أول ظهور: نجلب الإعدادات الحالية ونعبئ النموذج.
+  // ملاحظة: أيام افتراضية = من السبت للخميس إن لم تكن محفوظة.
   useEffect(() => {
     fetch('/api/notification-prefs')
       .then((r) => r.json())
@@ -41,6 +106,7 @@ export function NotificationPrefs() {
       .finally(() => setLoading(false));
   }, []);
 
+  // save: حفظ كل الإعدادات عبر PUT.
   async function save() {
     setSaving(true);
     setMessage(null);
@@ -59,6 +125,7 @@ export function NotificationPrefs() {
     setMessage('تم حفظ إعدادات الإشعارات.');
   }
 
+  // toggleDay: تفعيل/إلغاء يوم — نضيفه للمصفوفة أو نزيله منها.
   function toggleDay(k: string) {
     const days = form.days ?? [];
     setForm({
@@ -69,9 +136,11 @@ export function NotificationPrefs() {
 
   return (
     <div>
+      {/* رسائل الحالة */}
       {message && <div className="mb-4"><Alert variant="success"><span className="flex items-center gap-1"><Check className="h-4 w-4" /> {message}</span></Alert></div>}
       {error && <div className="mb-4"><Alert variant="danger">{error}</Alert></div>}
 
+      {/* قسم تذكيرات الوجبات */}
       <Card>
         <h2 className="mb-1 flex items-center gap-2 text-base font-bold text-ocean-900"><Bell className="h-4 w-4 text-ocean-500" /> تذكيرات الوجبات</h2>
         <p className="mb-4 text-sm text-slate-500">حدد مواعيد التذكير بوجباتك اليومية. تعمل الإشعارات بعد تفعيلها وتثبيت التطبيق (PWA).</p>
@@ -79,6 +148,7 @@ export function NotificationPrefs() {
           <p className="py-6 text-center text-sm text-slate-400">جارٍ التحميل…</p>
         ) : (
           <div className="space-y-5">
+            {/* مواعيد الوجبات الثلاث (فطور/غداء/عشاء) — نستخدم MEAL_TYPES للأسماء */}
             <div className="grid gap-3 sm:grid-cols-2">
               {(['breakfast', 'lunch', 'dinner'] as const).map((k) => (
                 <Field key={k} label={MEAL_TYPES[k]}>
@@ -89,6 +159,7 @@ export function NotificationPrefs() {
                 </Field>
               ))}
             </div>
+            {/* مواعيد أخرى: قبل/بعد التمرين، وزن، نوم */}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="قبل التمرين">
                 <Select value={form.preWorkoutTime ?? ''} onChange={(e) => setForm({ ...form, preWorkoutTime: e.target.value })}>
@@ -115,6 +186,7 @@ export function NotificationPrefs() {
                 </Select>
               </Field>
             </div>
+            {/* فاصل تذكير الماء */}
             <Field label="كل كم دقيقة للتذكير بالماء؟">
               <Select value={form.waterInterval ?? 60} onChange={(e) => setForm({ ...form, waterInterval: Number(e.target.value) })}>
                 {[30, 45, 60, 90, 120].map((n) => <option key={n} value={n}>{n} دقيقة</option>)}
@@ -124,10 +196,12 @@ export function NotificationPrefs() {
         )}
       </Card>
 
+      {/* أيام عمل التذكيرات */}
       <Card className="mt-5">
         <h2 className="mb-4 text-base font-bold text-ocean-900">أيام العمل بالتذكيرات</h2>
         <div className="flex flex-wrap gap-2">
           {DAYS.map((d) => (
+            /* زر اليوم: ممتلئ بالأزرق إذا كان مفعّلًا، ورمادي إذا لم يكن */
             <button
               key={d.key}
               type="button"
@@ -143,9 +217,11 @@ export function NotificationPrefs() {
         </div>
       </Card>
 
+      {/* تفضيلات عامة */}
       <Card className="mt-5">
         <h2 className="mb-4 text-base font-bold text-ocean-900">تفضيلات عامة</h2>
         <div className="space-y-3">
+          {/* مفاتيح التبديل (Toggle) — كل واحد يحدّث حقلًا في form */}
           <Toggle
             checked={!!form.pushEnabled}
             onChange={(v) => setForm({ ...form, pushEnabled: v })}
@@ -168,6 +244,7 @@ export function NotificationPrefs() {
             onChange={(v) => setForm({ ...form, soundEnabled: v })}
             label="صوت التنبيه"
           />
+          {/* ساعات الهدوء: لا إشعارات في هذه الفترة */}
           <div className="grid gap-3 pt-2 sm:grid-cols-2">
             <Field label="بداية ساعات الهدوء">
               <Input type="time" value={form.quietHoursStart ?? ''} onChange={(e) => setForm({ ...form, quietHoursStart: e.target.value })} />
@@ -176,6 +253,7 @@ export function NotificationPrefs() {
               <Input type="time" value={form.quietHoursEnd ?? ''} onChange={(e) => setForm({ ...form, quietHoursEnd: e.target.value })} />
             </Field>
           </div>
+          {/* تذكيرات البطولة والمراجعة */}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="تذكير قبل البطولة (أيام)">
               <Input type="number" min={1} max={30} value={form.competitionReminderDays ?? 7} onChange={(e) => setForm({ ...form, competitionReminderDays: Number(e.target.value) })} />
@@ -185,6 +263,7 @@ export function NotificationPrefs() {
             </Field>
           </div>
         </div>
+        {/* زر الحفظ — يرسل كل form مرة واحدة */}
         <div className="mt-5">
           <Button onClick={save} loading={saving}>
             <Save className="h-4 w-4" />

@@ -1,5 +1,41 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/types/index.ts
+
+وظيفة الملف:
+تعريف "أشكال البيانات" (أنواع TypeScript) التي يتشاركها كثير
+من الملفات: بيانات نموذج السباح، نتائج الحساب الغذائي، تحليل
+الوجبات، وتفضيلات الإشعارات.
+
+لماذا نحتاجه؟
+نحتاج شكلاً واحدًا ثابتًا للبيانات حتى لا تختلف أسماء الحقول بين
+ملف وآخر (مثلاً weightKg لا يُكتب في مكان آخر weight). أي ملف
+يخالف الشكل يُكتشف خطؤه في المحرر قبل تشغيل الموقع.
+
+من يستخدمه؟
+كل الصفحات وواجهات API التي تتعامل مع نموذج السباح أو نتائج
+الحساب أو تحليل الوجبات أو إعدادات الإشعارات.
+
+ملاحظة:
+ملف "أنواع" فقط — لا يحتوي على كود يُنفَّذ وقت التشغيل.
+=================================================
+*/
+
+// ========================================
+// 1. أدوار المستخدمين
+// ========================================
+
+// Role: نوع بسيط (Union) يحصر الدور في القيم الخمس المذكورة فقط.
+// الفائدة: لا يمكن تمرير أي نص آخر كدور بطريق الخطأ.
 export type Role = 'athlete' | 'guardian' | 'coach' | 'dietitian' | 'admin';
 
+// SwimmerFormData: كل الحقول التي يجمعها نموذج بيانات السباح
+// (الاستمارة). أغلب الحقول اختيارية (علامة ?) لأن السباح قد لا
+// يكمل كل الخانات في البداية، والحقول الإلزامية فقط بدون علامة.
 export interface SwimmerFormData {
   // أساسية
   fullName: string;
@@ -52,6 +88,9 @@ export interface SwimmerFormData {
   notes?: string;
 }
 
+// NutritionResult: نتائج الحساب الغذائي (مؤشر كتلة الجسم BMI،
+// معدل الأيض BMR، السعرات اليومية، الماكروز، الماء...).
+// كل الحقول اختيارية لأن النتائج تختلف حسب البيانات المتوفرة.
 export interface NutritionResult {
   bmi?: number;
   bmiCategory?: string;
@@ -76,6 +115,8 @@ export interface NutritionResult {
   recommendations?: Record<string, string>;
 }
 
+// AnalyzedFood: شكل "غذاء واحد" بعد تحليل الوجبة (اسم بالعربي
+// + قيم غذائية اختيارية).
 export interface AnalyzedFood {
   nameAr: string;
   nameEn?: string;
@@ -88,6 +129,8 @@ export interface AnalyzedFood {
   sodiumMg?: number;
 }
 
+// MealAnalysisResult: نتيجة تحليل وجبة كاملة — مصدر التحليل
+// (provider) + هل هي تقديرية (isEstimate) + مجموع القيم لكل الأطعمة.
 export interface MealAnalysisResult {
   provider: string;
   isEstimate: boolean;
@@ -104,6 +147,8 @@ export interface MealAnalysisResult {
   raw?: unknown;
 }
 
+// NotificationPrefForm: تفضيلات إشعارات المستخدم — أوقات الوجبات،
+// فترات الماء، إعدادات الصوت والوضع الصامت، وأزرار التفعيل.
 export interface NotificationPrefForm {
   breakfastTime?: string;
   lunchTime?: string;

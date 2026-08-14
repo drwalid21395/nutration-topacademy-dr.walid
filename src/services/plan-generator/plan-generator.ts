@@ -1,3 +1,50 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/services/plan-generator/plan-generator.ts
+
+وظيفة الملف:
+"المولد الذكي للخطط الغذائية" — يبني خططًا كاملة لعدة أيام
+(بدون تكرار حرفي)، كل يوم يتكون من وجبات، وكل وجبة من عناصر
+مختارة من قاعدة بيانات الأطعمة، مع مراعاة:
+- الحساسية والأطعمة غير المرغوبة.
+- النظام الغذائي (نباتي، خالٍ من اللاكتوز، خالٍ من الجلوتين).
+- الميزانية (اقتصادي) وتوفر الأطعمة.
+- الأهداف ونمط البطولة (أطعمة مخصصة للبطولة).
+كما يولد البدائل (اقتصادي/نباتي/خالٍ من اللاكتوز/خالٍ من الجلوتين)
+وقوائم المشتريات والنصائح.
+
+لماذا نحتاجه؟
+بدونه لا توجد خطة فعلية؛ هو الجزء الذي يحوّل الأرقام (سعرات،
+بروتين...) إلى وجبات يومية حقيقية قابلة للأكل.
+
+متى يعمل؟
+عند طلب "إنشاء خطة" من service.ts (createPlanFromTargets).
+
+من يستدعي هذا الملف؟
+src/services/plan/service.ts → generatePlan.
+
+الملفات التي يتعامل معها:
+- service.ts → يمرر foodDb وأنواعها (PlanFood).
+- لا يعتمد على Prisma مباشرة — يعمل على مصفوفة أطعمة جاهزة.
+
+ترتيب العمل:
+خيارات التوليد (سعرات، وجبات، مدة، قيود...) + قاعدة الأطعمة ↓
+تحديد الوجبات (حسب MEAL_SLOTS) وتوزيع السعرات عليها ↓
+اختيار عنصر لكل خانة مع استبعاد غير المناسب ↓
+حساب كمية كل عنصر (grams) من سعرات الخانة ↓
+توليد بدائل لكل وجبة ↓
+تكرار لكل يوم (مع تجنّب تكرار الأطعمة داخل النوع) ↓
+قائمة مشتريات + نصائح تحضير + أمان غذائي
+
+ملاحظة مهمة:
+هذه طبقة "منطق أعمال" — لا تعرض واجهة ولا تتعامل مع القاعدة مباشرة.
+==================================================
+*/
+
 /**
  * المولد الذكي للخطط الغذائية.
  * يبني خططًا متنوعة (لا تكرار حرفي للأيام) مع مراعاة:
@@ -5,6 +52,11 @@
  * الميزانية، توفر الأطعمة، والأهداف.
  */
 
+// ========================================
+// 1. الأنواع (عقود البيانات)
+// ========================================
+
+// شكل الطعام الذي يعتمد عليه المولد (محمّل من قاعدة البيانات).
 export interface PlanFood {
   id: string;
   nameAr: string;
@@ -27,6 +79,7 @@ export interface PlanFood {
   allergens?: string;
 }
 
+// خانة وجبة: نوع الوجبة + عنوانها + توقيتها + نصيبها من السعرات + خانات العناصر.
 export interface MealSlot {
   type: string; // mealType key
   title: string;
@@ -35,6 +88,7 @@ export interface MealSlot {
   slots: SlotSpec[];
 }
 
+// مواصفات خانة عنصر: التصنيفات المقبولة، أسماء مرشحة، ونصيبها من سعرات الوجبة.
 export interface SlotSpec {
   category: string[];
   labels: string[]; // أسماء مرشحة (fallback)
@@ -44,6 +98,7 @@ export interface SlotSpec {
   grams?: number; // كمية ثابتة مرشحة
 }
 
+// عنصر طعام داخل وجبة (بكمية وسعرات محسوبة).
 export interface PlanItem {
   foodNameAr: string;
   quantity: string;
@@ -54,6 +109,7 @@ export interface PlanItem {
   fatG: number;
 }
 
+// وجبة كاملة: عناصرها + بدائلها + بياناتها الغذائية.
 export interface PlanMeal {
   dayNumber: number;
   mealType: string;
@@ -68,6 +124,7 @@ export interface PlanMeal {
   note?: string;
 }
 
+// الخطة النهائية المولدة: أيام + مشتريات + نصائح + مجاميع يومية.
 export interface GeneratedPlan {
   days: PlanMeal[][]; // days[dayIndex] = meals[]
   shoppingList: string[];
@@ -81,6 +138,7 @@ export interface GeneratedPlan {
   };
 }
 
+// كل خيارات التوليد القادمة من المتصل (سعرات، مدة، قيود...).
 export interface GeneratorOptions {
   calories: number;
   proteinG: number;
@@ -100,6 +158,11 @@ export interface GeneratorOptions {
   foodDb: PlanFood[];
 }
 
+// ========================================
+// 2. الثوابت (الجداول والخطط)
+// ========================================
+
+// مواعيد الوجبات الشائعة (عنوان وتوقيت عربي).
 const MEAL_SCHEDULE: Record<string, { title: string; timing: string }> = {
   breakfast: { title: 'الفطور', timing: '8:00 صباحًا' },
   snack1: { title: 'وجبة خفيفة صباحية', timing: '10:30 صباحًا' },
@@ -113,6 +176,7 @@ const MEAL_SCHEDULE: Record<string, { title: string; timing: string }> = {
 };
 
 /** إرشادات تجهيز المكونات التي تحتاج إعدادًا خاصًا (تُضاف لطريقة تحضير الوجبة). */
+// لبعض الأطعمة تعليمات خاصة (مثل نقع الشيا أو طهي الأرز) تضاف لملاحظة الوجبة.
 const ITEM_PREP: Record<string, string> = {
   'بذور الشيا': 'تُنقع لا تُؤكل جافة: انقع ملعقتين كبيرتين في نصف كوب حليب أو لبن زبادي أو ماء ليلة كاملة (أو 30 دقيقة على الأقل) حتى تتماسك كبودنغ، ثم أضف التفاح المقطّع فوقها مع رشة قرفة.',
   'شوفان مطبوخ': 'اطبخ كوب شوفان مع كوبين حليب أو ماء على نار هادئة 5-7 دقائق حتى يتماسك، أو انقعه في الثلاجة ليلة كاملة (شوفان الليل).',
@@ -135,6 +199,7 @@ const ITEM_PREP: Record<string, string> = {
 };
 
 /** طريقة تحضير عامة لكل نوع وجبة (سطر واحد موجز). */
+// لكل نوع وجبة تعليمة تحضير عامة تظهر في ملاحظة الوجبة.
 const MEAL_PREP: Record<string, string> = {
   breakfast: 'بروتين (بيض/زبادي/جبن قريش) + نشويات (عيش/شوفان) + فاكهة، مع كوب ماء.',
   snack1: 'وجبة خفيفة سريعة تُؤكل مباشرة، وإن احتوت بذور شيا فانقعها أولًا (انظر أدناه).',
@@ -147,6 +212,7 @@ const MEAL_PREP: Record<string, string> = {
   supper: 'وجبة قبل النوم: بروتين بطيء الهضم مثل الزبادي أو الجبن القريش.',
 };
 
+// الوجبات الافتراضية لليوم (بالترتيب) — عددها يتحدد بعدد الوجبات المطلوبة.
 const DEFAULT_MEALS: string[] = [
   'breakfast',
   'snack1',
@@ -157,6 +223,7 @@ const DEFAULT_MEALS: string[] = [
   'snack2',
 ];
 
+// النصيب الافتراضي لكل وجبة من إجمالي سعرات اليوم.
 const DEFAULT_SHARES: Record<string, number> = {
   breakfast: 0.25,
   snack1: 0.1,
@@ -170,6 +237,7 @@ const DEFAULT_SHARES: Record<string, number> = {
 };
 
 /** قوالب الوجبات: كل نوع وجبة له مكونات محددة */
+// لكل نوع وجبة خانات عناصر: التصنيفات المقبولة + أسماء مرشحة + نصيب سعراتي.
 export const MEAL_SLOTS: Record<string, SlotSpec[]> = {
   breakfast: [
     { category: ['ألبان وبيض', 'بقوليات'], labels: ['بيضة مسلوقة', 'زبادي يوناني', 'جبنة قريش', 'فول مدمس'], min: 1, max: 2 },
@@ -217,6 +285,20 @@ export const MEAL_SLOTS: Record<string, SlotSpec[]> = {
   ],
 };
 
+// ========================================
+// 3. دوال الفلترة (الأنظمة الغذائية والميزانية)
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: fitsDiet
+-----------------------------------------
+وظيفتها: هل الطعام مناسب لنمط الحمية المختار (نباتي/خالٍ من اللاكتوز/الجلوتين)؟
+Input: طعام + خيارات.
+Output: true/false.
+متى تُستدعى؟ داخل generatePlan و generateMealAlternatives.
+-----------------------------------------
+*/
 /** هل الطعام مناسب لنمط الحمية المختار */
 function fitsDiet(food: PlanFood, opts: GeneratorOptions): boolean {
   const diet = opts.dietType;
@@ -226,17 +308,30 @@ function fitsDiet(food: PlanFood, opts: GeneratorOptions): boolean {
   return true;
 }
 
+/*
+-----------------------------------------
+الدالة: isExcluded
+-----------------------------------------
+وظيفتها: هل الطعام ضمن المستبعدات؟ (كلمات حساسية/أطعمة غير مرغوبة)
+Processing: يقارن اسم الطعام ووسم allergens بكل كلمة مستبعدة.
+Output: true إذا كان مستبعدًا.
+متى تُستدعى؟ في كل اختيار عنصر.
+-----------------------------------------
+*/
 /** هل الطعام ضمن المستبعدات (حساسية/غير مرغوب) */
 function isExcluded(food: PlanFood, opts: GeneratorOptions): boolean {
+  // نقارن اسم الطعام بكلمات الحساسية والأطعمة غير المرغوبة.
   const lowerName = food.nameAr.toLowerCase();
   const excluded =
     (opts.allergies ?? '').toLowerCase() + ' ' + (opts.dislikedFoods ?? '').toLowerCase();
   if (excluded.trim()) {
+    // نقسم النص إلى كلمات (فاصلة أو مسافة) ونفحص كل واحدة.
     const words = excluded.split(/[،,;\s]+/).filter(Boolean);
     for (const w of words) {
       if (lowerName.includes(w)) return true;
     }
   }
+  // فحص وسم الحساسية المسجل على الطعام نفسه (مثل "مكسرات").
   if (food.allergens) {
     const allergens = (opts.allergies ?? '').toLowerCase();
     for (const a of food.allergens.split(/[،,]/)) {
@@ -246,6 +341,7 @@ function isExcluded(food: PlanFood, opts: GeneratorOptions): boolean {
   return false;
 }
 
+// أطعمة باهظة تُستبعد عند اختيار الميزانية "منخفضة".
 const EXPENSIVE_FOODS = [
   'سلمون مشوي',
   'أفوكادو',
@@ -256,6 +352,7 @@ const EXPENSIVE_FOODS = [
   'مشروب بروتين',
 ];
 
+// هل الطعام مناسب للميزانية؟ (عند low نستبعد الأغذية الباهظة).
 function fitsBudget(food: PlanFood, opts: GeneratorOptions): boolean {
   if (opts.budgetLevel === 'low') {
     return !EXPENSIVE_FOODS.includes(food.nameAr);
@@ -263,21 +360,40 @@ function fitsBudget(food: PlanFood, opts: GeneratorOptions): boolean {
   return true;
 }
 
+/*
+-----------------------------------------
+الدالة: pick
+-----------------------------------------
+وظيفتها: اختيار طعام عشوائي من مجموعة مع تجنّب التكرار إن أمكن.
+Processing:
+  - إن حُدد اسم مرشح ووُجد في المجموعة نعيده مباشرة.
+  - نحاول اختيار طعام غير مستخدم سابقًا في نفس النوع (used).
+  - إن لم يبقَ جديد نختار عشوائيًا من الكل (لا تكرار حرفي للأيام).
+Output: PlanFood أو undefined.
+-----------------------------------------
+*/
 function pick(
   pool: PlanFood[],
   label?: string,
   used = new Set<string>()
 ): PlanFood | undefined {
   let candidates = pool;
+  // إن كان اسم مرشح موجودًا نفضّله (اختيار حتمي عند الحاجة).
   if (label) {
     const match = pool.find((f) => f.nameAr === label);
     if (match) return match;
   }
+  // نفضّل طعامًا لم يُستخدم بعد في هذا النوع لتنويع الأيام.
   const notUsed = candidates.filter((f) => !used.has(f.nameAr));
   const source = notUsed.length > 0 ? notUsed : candidates;
   return source[Math.floor(Math.random() * source.length)];
 }
 
+// ========================================
+// 4. البدائل الغذائية
+// ========================================
+
+// أنواع البدائل المدعومة بأسمائها العربية للعرض.
 export const ALTERNATIVE_LABELS: Record<string, string> = {
   economical: 'بديل اقتصادي',
   vegetarian: 'بديل نباتي',
@@ -285,6 +401,19 @@ export const ALTERNATIVE_LABELS: Record<string, string> = {
   glutenFree: 'بديل خالٍ من الجلوتين',
 };
 
+/*
+-----------------------------------------
+الدالة: generateMealAlternatives
+-----------------------------------------
+وظيفتها: توليد بدائل الوجبة (اقتصادي/نباتي/خالٍ من اللاكتوز/الجلوتين).
+Input: الخيارات + خانات الوجبة + السعرات المستهدفة + سعرات العناصر الحالية.
+Processing:
+  - لكل نوع بديل نرشح أطعمة تناسب شرطه وتوافق التصنيف.
+  - نحسب كمية كل بديل من سعراته المستهدفة عبر scale.
+Output: Record<string, PlanItem[]> — مفتاح = نوع البديل.
+من يستدعيها؟ generatePlan.
+-----------------------------------------
+*/
 /** توليد بدائل الوجبة (اقتصادي/نباتي/خالٍ من اللاكتوز/خالٍ من الجلوتين) */
 export function generateMealAlternatives(
   opts: GeneratorOptions,
@@ -294,8 +423,10 @@ export function generateMealAlternatives(
 ): Record<string, PlanItem[]> {
   const alternatives: Record<string, PlanItem[]> = {};
 
+  // نمر على كل أنواع البدائل.
   (Object.keys(ALTERNATIVE_LABELS) as (keyof typeof ALTERNATIVE_LABELS)[]).forEach((altKey) => {
     const altItems: PlanItem[] = [];
+    // لكل خانة في الوجبة نرشح الطعام المناسب لذلك النوع من البدائل.
     for (const slot of slots) {
       let altPool = opts.foodDb.filter(
         (f) =>
@@ -312,6 +443,7 @@ export function generateMealAlternatives(
       if (altPool.length === 0) continue;
       const food = pick(altPool, undefined);
       if (!food) continue;
+      // سعرات البديل = سعرات الخانة، ثم نحولها لكمية جرامات عبر scale.
       const altCals = (target - itemsCals) * (slot.targetShare ?? 0.3);
       const grams = scale(food, Math.max(40, altCals));
       const factor = grams / (food.gramsPerPortion || 100);
@@ -331,21 +463,51 @@ export function generateMealAlternatives(
   return alternatives;
 }
 
+// ========================================
+// 5. دوال حساب الكميات
+// ========================================
+
+// حساب الجرامات اللازمة لتحقيق سعرات مستهدفة: (سعرات الهدف ÷ سعرات الحصة) × جرام الحصة.
 function scale(food: PlanFood, targetCals: number): number {
   if (!food.gramsPerPortion || food.calories <= 0) return food.gramsPerPortion ?? 100;
   return Math.round((targetCals / food.calories) * food.gramsPerPortion);
 }
 
+// تقريب السعرات إلى أقرب مضاعف 5 (أرقام أنظف للعرض).
 function round5(n: number): number {
   return Math.round(n / 5) * 5;
 }
 
+// ========================================
+// 6. الدالة الرئيسية: توليد الخطة
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: generatePlan
+-----------------------------------------
+وظيفتها: توليد خطة كاملة لعدة أيام.
+Input: GeneratorOptions (سعرات، وجبات، مدة، قيود، قاعدة الأطعمة).
+Processing:
+  1. تحديد عدد الوجبات (3-8) وترتيبها وتوزيع السعرات عليها.
+  2. تصحيح مجموع السعرات ليطابق الهدف تقريبًا.
+  3. لكل يوم: لكل وجبة نختار عناصر من خاناتها (مع الفلاتر).
+  4. نحسب كمية وسعرات كل عنصر، ثم نجمع مجاميع الوجبة.
+  5. نضيف البدائل وملاحظة التحضير.
+  6. في النهاية: قائمة مشتريات + نصائح تحضير وسلامة + مجاميع يومية.
+Output: GeneratedPlan.
+من يستدعيها؟ service.ts و generateCompetitionDayPlan.
+ماذا تستدعي هي؟ fitsDiet، isExcluded، fitsBudget، pick، scale، generateMealAlternatives.
+-----------------------------------------
+*/
 export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
+  // عدد الوجبات محصور بين 3 و 8، ونأخذ الوجبات من القائمة الافتراضية بالترتيب.
   const mealsPerDay = Math.min(8, Math.max(3, opts.mealsPerDay));
   const mealOrder = [...DEFAULT_MEALS];
   const mealTypes = mealOrder.slice(0, mealsPerDay);
 
   // ميزانية السعرات للوجبة الواحدة
+  // نصيب كل وجبة من إجمالي السعرات، مع تصحيح النسب ليكون مجموعها كاملًا.
   const mealCals: Record<string, number> = {};
   const baseCals = opts.calories;
   const totalShare = mealTypes.reduce((acc, t) => acc + (DEFAULT_SHARES[t] ?? 0.15), 0);
@@ -354,6 +516,7 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
   });
 
   // إصلاح المجموع ليطابق السعرات المستهدفة تقريبًا
+  // إن اختلف المجموع عن الهدف بأكثر من 20 سعرة نضيف الفرق لأول وجبة.
   const sumCals = Object.values(mealCals).reduce((a, b) => a + b, 0);
   if (sumCals !== 0 && Math.abs(sumCals - baseCals) > 20) {
     const diff = baseCals - sumCals;
@@ -362,24 +525,31 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
   }
 
   const days: PlanMeal[][] = [];
+  // نتذكر الأطعمة المستخدمة لكل نوع وجبة حتى لا تتكرر بين الأيام.
   const usedGlobally = new Map<string, Set<string>>();
 
+  // نبني الأيام واحدًا تلو الآخر.
   for (let day = 1; day <= opts.durationDays; day++) {
     const dayMeals: PlanMeal[] = [];
 
+    // لكل نوع وجبة في اليوم.
     mealTypes.forEach((type) => {
       if (!usedGlobally.has(type)) usedGlobally.set(type, new Set());
       const usedInType = usedGlobally.get(type)!;
 
+      // السعرات المستهدفة للوجبة وخاناتها.
       const target = mealCals[type] ?? 250;
       const slots = MEAL_SLOTS[type] ?? [];
       const items: PlanItem[] = [];
+      // نجمع مجاميع العناصر لحساب ما تبقى للسعرات.
       let itemsCals = 0;
       let itemsP = 0;
       let itemsC = 0;
       let itemsF = 0;
 
+      // لكل خانة نرشح الطعام المناسب.
       slots.forEach((slot, idx) => {
+        // المرشحون: من التصنيف المطلوب + يناسب النظام الغذائي + غير مستبعد + يناسب الميزانية.
         let pool = opts.foodDb.filter(
           (f) =>
             slot.category.includes(f.category) &&
@@ -388,21 +558,28 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
             fitsBudget(f, opts)
         );
 
+        // في نمط البطولة نفضّل الأطعمة المخصصة للبطولة إن وُجدت.
         if (opts.isCompetition) {
           const compPool = pool.filter((f) => f.isCompetition);
           if (compPool.length > 0) pool = compPool;
         }
 
+        // إن لم يوجد مرشح مناسب إطلاقًا نسمح بكل أطعمة التصنيف
+        // (بديل أفضل من ترك الخانة فارغة).
         if (pool.length === 0) {
           pool = opts.foodDb.filter((f) => slot.category.includes(f.category));
         }
 
+        // الاسم المرشح الافتراضي (يُفضل عند توفره).
         const label = slot.labels[idx % slot.labels.length];
         const food = pick(pool, label, usedInType);
         if (!food) return;
 
+        // نمنع تكرار هذا الطعام في نفس نوع الوجبة خلال الأيام.
         usedInType.add(food.nameAr);
 
+        // سعرات الخانة = ما تبقى من سعرات الوجبة × نصيب الخانة،
+        // ثم نحولها إلى كمية جرامات.
         const slotTarget = (target - itemsCals) * (slot.targetShare ?? 0.3);
         const grams = slot.grams ?? scale(food, Math.max(40, slotTarget));
         const factor = grams / (food.gramsPerPortion || 100);
@@ -411,6 +588,7 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
         const c = Math.round(food.carbsG * factor * 10) / 10;
         const f = Math.round(food.fatG * factor * 10) / 10;
 
+        // نضيف العنصر ونحدّث المجاميع.
         items.push({
           foodNameAr: food.nameAr,
           quantity: `${grams} جم (≈ ${food.portionLabel})`,
@@ -426,9 +604,10 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
         itemsF += f;
       });
 
-      // البدائل
+      // البدائل: اقتصاد/نباتي/خالٍ من اللاكتوز/خالٍ من الجلوتين.
       const alternatives = generateMealAlternatives(opts, slots, target, itemsCals);
 
+      // العنوان والتوقيت من جدول المواعيد.
       const meta = MEAL_SCHEDULE[type] ?? { title: type, timing: '' };
 
       // طريقة التحضير والتجهيز: سطر عام لكل وجبة + إرشادات خاصة لكل مكوّن يحتاج إعدادًا
@@ -443,6 +622,7 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
         ? `طريقة التحضير والتجهيز:\n${prepLines.join('\n')}`
         : undefined;
 
+      // نضيف الوجبة كاملة لليوم.
       dayMeals.push({
         dayNumber: day,
         mealType: type,
@@ -462,6 +642,7 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
   }
 
   // قائمة مشتريات أسبوعية
+  // نجمع أسماء كل الأطعمة في أول 7 أيام (بدون تكرار) عبر Set.
   const shopping = new Set<string>();
   days.slice(0, 7).forEach((dayMeals) => {
     dayMeals.forEach((m) => {
@@ -469,6 +650,7 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
     });
   });
 
+  // نجمع كل شيء في الخطة النهائية.
   return {
     days,
     shoppingList: Array.from(shopping),
@@ -493,6 +675,20 @@ export function generatePlan(opts: GeneratorOptions): GeneratedPlan {
   };
 }
 
+// ========================================
+// 7. خطة يوم البطولة
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: generateCompetitionDayPlan
+-----------------------------------------
+وظيفتها: توليد خطة استعداد ليوم البطولة (أو يوم خاص).
+Processing: تعدل الخيارات (5 وجبات + نمط بطولة) ثم تستدعي generatePlan.
+Output: GeneratedPlan.
+من يستدعيها؟ المتصلون بخطط البطولة.
+-----------------------------------------
+*/
 /** توليد خطة استعداد ليوم البطولة (أو يوم واحد خاص) */
 export function generateCompetitionDayPlan(opts: GeneratorOptions): GeneratedPlan {
   const opts2: GeneratorOptions = {

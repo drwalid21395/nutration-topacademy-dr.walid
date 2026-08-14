@@ -1,22 +1,81 @@
-import { Navbar } from '@/components/layout/navbar';
-import { Footer } from '@/components/layout/footer';
-import { getCurrentUser } from '@/lib/auth';
-import { MEDICAL_DISCLAIMER, BRAND } from '@/lib/constants';
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
 
+اسم الملف:
+src/app/medical-disclaimer/page.tsx
+
+وظيفة الملف:
+صفحة "إخلاء المسؤولية الطبية" (المسار /medical-disclaimer)
+— صفحة ثابتة توضح أن الحسابات والخطط إرشادية تعليمية،
+وليست وصفات علاجية، وتحذر من الحالات الصحية والقاصرين.
+
+لماذا نحتاجه؟
+الالتزام بأخلاقيات وسلامة التغذية الرياضية: توضيح أن
+المنصة ليست بديلًا عن الطبيب أو اختصاصي التغذية.
+
+نوعها: Server Component (بدون 'use client').
+لا توجد بيانات متغيرة؛ الخادم يعرض النص فقط بعد معرفة
+حالة تسجيل الدخول لشكل القائمة.
+
+متى يعمل؟
+عند فتح /medical-disclaimer (من رابط في التذييل أو إخلاء
+المسؤولية في التسجيل).
+
+من يستدعي هذا الملف؟
+Next.js يعرضه تلقائيًا لأي زيارة للمسار.
+
+الملفات التي يتعامل معها:
+- Navbar من components/layout/navbar و Footer من components/layout/footer.
+- getCurrentUser من lib/auth.
+- MEDICAL_DISCLAIMER و BRAND من lib/constants.
+
+ترتيب العمل:
+1. معرفة المستخدم الحالي.
+2. عرض الشريط العلوي.
+3. عرض نص إخلاء المسؤولية العام ثم الأقسام الخمسة.
+4. التذييل.
+==================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+import { Navbar } from '@/components/layout/navbar'; // الشريط العلوي — ملف محلي.
+import { Footer } from '@/components/layout/footer'; // التذييل — ملف محلي.
+import { getCurrentUser } from '@/lib/auth'; // دالة محلية: المستخدم المسجل حاليًا.
+import { MEDICAL_DISCLAIMER, BRAND } from '@/lib/constants'; // نص الإخلاء + اسم المنصة — ملف محلي.
+
+// ========================================
+// 2. بيانات التعريف
+// ========================================
+
+// metadata: عنوان الصفحة في تبويب المتصفح.
 export const metadata = { title: 'إخلاء المسؤولية الطبية' };
 
+// ========================================
+// 3. الصفحة الرئيسية (تعمل في الخادم)
+// ========================================
+
+// MedicalDisclaimerPage: الدالة الرئيسية للصفحة (تعمل في الخادم).
 export default async function MedicalDisclaimerPage() {
+  // المستخدم الحالي (لشكل القائمة العلوية فقط).
   const user = await getCurrentUser();
 
   return (
     <>
+      {/* الشريط العلوي. */}
       <Navbar isLoggedIn={!!user} user={user} />
       <main className="water-bg">
         <section className="container-app py-16">
           <div className="mx-auto max-w-3xl">
             <h1 className="text-3xl font-black text-ocean-900">إخلاء المسؤولية الطبية</h1>
+            {/* الفقرة العامة القادمة من الثوابت (مكتوبة مرة واحدة في lib/constants). */}
             <p className="mt-3 text-sm leading-relaxed text-slate-600">{MEDICAL_DISCLAIMER}</p>
 
+            {/* الأقسام الخمسة التفصيلية — نصوص ثابتة مكتوبة هنا */}
             <div className="mt-8 space-y-6 text-sm leading-relaxed text-slate-700">
               <div>
                 <h2 className="text-lg font-bold text-ocean-800">ما الذي تعنيه الخطط المعروضة؟</h2>
@@ -58,6 +117,7 @@ export default async function MedicalDisclaimerPage() {
           </div>
         </section>
       </main>
+      {/* التذييل. */}
       <Footer />
     </>
   );

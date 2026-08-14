@@ -1,3 +1,47 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/profile/profile-summary.tsx
+
+وظيفة الملف:
+"ملخص بياناتي" — صفحة عرض كاملة لكل بيانات السباح:
+- بطاقة رئيسية: الاسم، الدور، الشارات (ذكر/أنثى، مرحلة، تنبيه طبي).
+- إحصائيات سريعة: العمر، الطول، الوزن، البطولة القادمة.
+- ملخص سريع (نبذة) بأهم المعلومات.
+- أقسام تفصيلية: بيانات أساسية، تدريب، حالة غذائية وصحية،
+  ملخص الأسبوع الأخير، آخر قياسات الوزن.
+- تنبيه "ملف غير مكتمل" مع زر إكمال البيانات.
+
+لماذا نحتاجه؟
+هي الشاشة التي يراجع بها المستخدم (أو المدرب أو الاختصاصي)
+كل بيانات السباح في صفحة واحدة واضحة.
+
+'use client':
+لا يحتاجها — مكوّن عرض ثابت يستقبل البيانات كـ Props.
+
+متى يعمل؟
+في /my-profile (بياناتي) و/الملف الكامل عبر /admin/swimmer/[id].
+
+من يستدعي هذا الملف؟
+src/app/my-profile/page.tsx و src/app/admin/swimmer/[id]/page.tsx.
+
+الملفات التي يتعامل معها:
+- لا API — يتلقى كل البيانات من الصفحة المستدعية كـ Props.
+- lib/utils: calculateAge، formatNumber، formatDate.
+- lib/constants: قوائم الترجمة (ROLES، GOALS، SWIMMER_LEVELS...).
+- مكونات: Card، Stat، Badge، Alert، UserAvatar.
+
+ترتيب العمل:
+1. الصفحة تجهّز البيانات (user، profile، targets، plan، weights، week) ↓
+2. نحسب العمر ومؤشر كتلة الجسم ↓
+3. نعرض البطاقة الرئيسية + الإحصائيات ↓
+4. نعرض الأقسام التفصيلية عبر Row/Section (صفوف تُخفي القيم الفارغة)
+==================================================
+*/
+
 import Link from 'next/link';
 import {
   User,
@@ -29,6 +73,7 @@ import {
   PLAN_TYPES,
 } from '@/lib/constants';
 
+// BMI_CATEGORY: ترجمة فئات مؤشر كتلة الجسم إلى عربية.
 const BMI_CATEGORY: Record<string, string> = {
   'underweight': 'نحافة',
   'normal': 'طبيعي',
@@ -36,6 +81,11 @@ const BMI_CATEGORY: Record<string, string> = {
   'obese': 'سمنة',
 };
 
+// ========================================
+// أنواع البيانات (الـ Props)
+// ========================================
+
+// SummaryProfile: ملف السباح الكامل (نفس حقول نموذج الملف).
 type SummaryProfile = {
   fullName: string;
   gender: string;
@@ -84,6 +134,7 @@ type SummaryProfile = {
   medicalAlert: boolean;
 };
 
+// Targets: الأهداف المحسوبة (من الحاسبة).
 type Targets = {
   bmi: number | null;
   bmiCategory: string | null;
@@ -95,6 +146,7 @@ type Targets = {
   tdee: number | null;
 };
 
+// WeekSummary: ملخص الأسبوع الأخير من سجلات المتابعة.
 type WeekSummary = {
   waterMl: number;
   foodCount: number;
@@ -103,6 +155,12 @@ type WeekSummary = {
   trainingMin: number;
 };
 
+// ========================================
+// مكوّنات مساعدة صغيرة
+// ========================================
+
+// Row: صف واحد (تسمية ← قيمة).
+// ذكي: يخفي نفسه تلقائيًا إذا كانت القيمة فارغة (null/''/false).
 function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   if (value === null || value === undefined || value === '' || value === false) return null;
   if (typeof value === 'boolean') return null;
@@ -114,6 +172,7 @@ function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   );
 }
 
+// Section: قسم كامل داخل بطاقة — أيقونة + عنوان + صفوف.
 function Section({
   icon,
   title,
@@ -134,6 +193,19 @@ function Section({
   );
 }
 
+// ========================================
+// المكوّن الرئيسي: ProfileSummary
+// ========================================
+
+// ProfileSummary: الملخص الكامل.
+// Props:
+// - user: بيانات الحساب (اسم/بريد/صورة/دور/تاريخ انضمام).
+// - profile: ملف السباح (أو null).
+// - targets: الأهداف المحسوبة.
+// - plan: الخطة الغذائية الحالية.
+// - weights: قياسات الوزن الأخيرة.
+// - week: ملخص الأسبوع من السجلات.
+// - isOwn: هل هذا حسابي أنا؟ (يؤثر على زر "تعديل الملف").
 export function ProfileSummary({
   user,
   profile,
@@ -151,11 +223,16 @@ export function ProfileSummary({
   week: WeekSummary;
   isOwn: boolean;
 }) {
+  // الاسم المعروض: من الملف إن وُجد وإلا من الحساب.
   const name = profile?.fullName || user.name || '—';
+  // العمر: نحسبه من تاريخ الميلاد عبر calculateAge.
   const age = profile?.birthDate ? calculateAge(profile.birthDate) : null;
+  // مؤشر كتلة الجسم BMI: من الأهداف المحسوبة، أو نحسبه يدويًا
+  // (الوزن كجم ÷ مربع الطول بالمتر).
   const bmi = targets?.bmi ?? (profile?.weightKg && profile.heightCm ? profile.weightKg / Math.pow(profile.heightCm / 100, 2) : null);
   const bmiCategory = targets?.bmiCategory ?? null;
 
+  // stats: بطاقات الإحصائيات السريعة الست.
   const stats = [
     { icon: CalendarDays, label: 'العمر', value: age !== null ? `${age} سنة` : '—' },
     {
@@ -177,6 +254,7 @@ export function ProfileSummary({
     },
   ];
 
+  // summaryLines: سطور "نبذة مختصرة" — نضيف سطرًا لكل معلومة مهمة موجودة.
   const summaryLines: string[] = [];
   if (profile?.weightKg) summaryLines.push(`الوزن الحالي ${formatNumber(profile.weightKg)} كجم${profile.targetWeightKg ? ` والهدف ${formatNumber(profile.targetWeightKg)} كجم` : ''}`);
   if (profile?.heightCm) summaryLines.push(`الطول ${formatNumber(profile.heightCm)} سم`);
@@ -190,8 +268,10 @@ export function ProfileSummary({
     <div className="space-y-6">
       {/* البطاقة الرئيسية */}
       <Card>
+        {/* الشريط العلوي الملون: الدور + زر التعديل */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-2xl bg-gradient-to-l from-ocean-700 via-ocean-800 to-ocean-950 px-5 py-3 text-white">
           <p className="text-sm font-bold text-gold-300">{ROLES[user.role as keyof typeof ROLES] ?? user.role}</p>
+          {/* زر التعديل يظهر فقط عندما نعرض حسابنا (isOwn) */}
           {isOwn ? (
             <Link href="/swimmer-profile" className="flex items-center gap-1.5 rounded-xl bg-white/15 px-3 py-1.5 text-xs font-bold backdrop-blur transition-colors hover:bg-white/25">
               <Pencil className="h-3.5 w-3.5" />
@@ -199,6 +279,7 @@ export function ProfileSummary({
             </Link>
           ) : null}
         </div>
+        {/* الصورة والاسم والشارات */}
         <div className="flex flex-wrap items-center gap-5 px-5 py-5">
           <UserAvatar
             name={name}
@@ -209,6 +290,7 @@ export function ProfileSummary({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-2xl font-black text-ocean-900">{name}</h1>
+              {/* شارات: الجنس، المرحلة العمرية، التنبيه الطبي */}
               {profile?.gender === 'male' ? <Badge color="slate">ذكر</Badge> : profile?.gender === 'female' ? <Badge color="gold">أنثى</Badge> : null}
               {profile?.ageGroup ? <Badge color="green">{AGE_GROUPS[profile.ageGroup as keyof typeof AGE_GROUPS] ?? profile.ageGroup}</Badge> : null}
               {profile?.medicalAlert ? <Badge color="red">يتطلب مراجعة طبية</Badge> : null}
@@ -216,6 +298,7 @@ export function ProfileSummary({
             <p className="mt-1 truncate text-sm text-slate-500" dir="ltr">{user.email}</p>
           </div>
         </div>
+        {/* 4 مربعات إحصائية سريعة */}
         <div className="grid grid-cols-2 gap-3 border-t border-slate-100 px-5 py-4 sm:grid-cols-4">
           <div className="rounded-xl bg-ocean-50/70 p-3 text-center">
             <p className="text-xs font-semibold text-slate-400">العمر</p>
@@ -234,6 +317,7 @@ export function ProfileSummary({
             <p className="mt-1 text-base font-black text-ocean-900">{profile?.nextCompetitionDate ? formatDate(profile.nextCompetitionDate) : '—'}</p>
           </div>
         </div>
+        {/* سطر إضافي: الدولة، التخصص، تاريخ الانضمام */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 px-5 pb-5 text-xs text-slate-500">
           {profile?.country && <span>🌍 {profile.country}</span>}
           {profile?.specialty && <span>🏊 {SPECIALTIES[profile.specialty as keyof typeof SPECIALTIES] ?? profile.specialty}</span>}
@@ -241,20 +325,21 @@ export function ProfileSummary({
         </div>
       </Card>
 
+      {/* تنبيه طبي يظهر فوق كل شيء عند وجوده */}
       {profile?.medicalAlert && (
         <Alert variant="danger" title="تنبيه طبي">
           تم تسجيل حالة صحية أو سباح قاصر — الخطط لهذا السباح إرشادية فقط وتتطلب مراجعة اختصاصي تغذية رياضية وطبيب عند الحاجة.
         </Alert>
       )}
 
-      {/* ملخص سريع */}
+      {/* ملخص سريع: بطاقات الإحصائيات الست */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {stats.map((s) => (
           <Stat key={s.label} icon={<s.icon className="h-5 w-5" />} label={s.label} value={s.value} />
         ))}
       </div>
 
-      {/* نبذة مختصرة */}
+      {/* نبذة مختصرة (سطور نقطية) */}
       {summaryLines.length > 0 && (
         <Card>
           <h2 className="mb-2 flex items-center gap-2 text-base font-bold text-ocean-900">

@@ -1,6 +1,59 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/polar.ts
+
+وظيفة الملف:
+"المحوّل الفعلي" (Adapter) لساعات Polar — يستقبل البيانات من
+Polar AccessLink API v3 ويحوّلها للصيغة الموحّدة عبر
+polar-mapping.ts، مع تسجيل المستخدم لدى Polar وتجديد التوكن
+تلقائيًا.
+
+لماذا نحتاجه؟
+Polar ممتازة في تدريبات السباحة مع نبض القلب. بدل كتابة
+منطقها في كل مكان، نضعه كله هنا: رابط الربط، تسجيل المستخدم
+(ensureUser)، جلب النشاط والنوم والنبض والوزن والتدريبات،
+وتجديد التوكن. هو "مترجم من لغة Polar إلى لغة الموقع".
+
+متى يعمل؟
+- عند بدء الربط من المتصفح (connect).
+- عند المزامنة الدورية أو اليدوية (sync / getWorkouts).
+
+من يستدعيه؟
+- src/lib/wearables/adapters.ts (يرجعه كمحوّل عند طلب polar).
+- src/lib/wearables/sync.ts (للمزامنة).
+
+الملفات التي يتعامل معها:
+- ./types: الواجهة الموحّدة WearableProviderAdapter.
+- ./polar-mapping: تحويل اسم الرياضة والمدة إلى الصيغة الموحّدة.
+- src/lib/crypto.ts: تشفير/فك تشفير التوكنات.
+- src/lib/prisma.ts: قراءة/تحديث اتصال المستخدم.
+
+ترتيب العمل:
+connect (رابط الإذن) ← callback يخزن التوكن ← sync: تسجيل
+المستخدم ← جلب 7 أيام (نشاط+نوم+نبض+وزن) + تدريبات ←
+تمرير النتيجة للـ ingest
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// prisma: من ملف محلي (src/lib/prisma.ts) — الاتصال بقاعدة البيانات.
 import { prisma } from '@/lib/prisma';
+
+// من ملف محلي src/lib/crypto.ts: تشفير التوكن قبل الحفظ وفكّه قبل الاستخدام.
 import { decryptText, encryptText } from '@/lib/crypto';
+
+// من ملف محلي ./types: الواجهة الموحّدة + أشكال البيانات + الخطأ الموحّد.
 import { WearableProviderAdapter, ProviderHealthData, WearableProviderId, ProviderNotConfiguredError } from './types';
+
+// من ملف محلي ./polar-mapping: "قاموس الترجمة" — تحويل اسم
+// الرياضة والمدة إلى الصيغة الموحّدة.
 import { mapPolarSport, parsePolarDuration } from './polar-mapping';
 
 /**
@@ -10,17 +63,41 @@ import { mapPolarSport, parsePolarDuration } from './polar-mapping';
  * - تجديد التوكن تلقائيًا عند الانتهاء.
  */
 
+// ========================================
+// 2. ثوابت الاتصال بموقع Polar
+// ========================================
+
+// عناوين Polar الرسمية (قاعدة API + نقطة تبديل التوكن).
 const POLAR_BASE = 'https://www.polaraccesslink.com/v3';
 const POLAR_TOKEN = 'https://polarremote.com/v2/oauth2/token';
+
+// كم يومًا نرجع إلى الوراء عند المزامنة (آخر أسبوع).
 const DAYS_BACK = 7;
 
+// dateStr: تحويل تاريخ إلى نص YYYY-MM-DD (الصيغة التي تقبلها Polar).
 function dateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+// ========================================
+// 3. المحوّل PolarAdapter
+// ========================================
+
+/*
+-----------------------------------------
+الصنف: PolarAdapter
+-----------------------------------------
+وظيفته: تنفيذ واجهة WearableProviderAdapter لصالح Polar —
+        الربط، المزامنة، جلب التدريبات، تجديد التوكن،
+        وتسجيل المستخدم لدى Polar.
+id: يصرّح بنفسه كمزود 'polar'.
+-----------------------------------------
+*/
 export class PolarAdapter implements WearableProviderAdapter {
   readonly id: WearableProviderId = 'polar';
 
+  // connect: يبني رابط الإذن الرسمي (OAuth عبر flow.polar.com)
+  // مع صلاحية الوصول الكامل accesslink.read_all.
   async connect(): Promise<{ url?: string; status: 'redirect' | 'configured' | 'unsupported' }> {
     const clientId = process.env.POLAR_CLIENT_ID;
     if (!clientId) return { status: 'unsupported' };
@@ -34,10 +111,25 @@ export class PolarAdapter implements WearableProviderAdapter {
     return { status: 'redirect', url: `https://flow.polar.com/oauth2/authorization?${params.toString()}` };
   }
 
+  // disconnect: Polar لا يملك مسارًا موحّدًا للإلغاء —
+  // يُترك الإلغاء يدويًا لدى Polar.
   async disconnect(_userId: string): Promise<void> {
     return undefined;
   }
 
+  /*
+  -----------------------------------------
+  الدالة الداخلية: refreshIfNeeded
+  -----------------------------------------
+  وظيفتها: التأكد أن التوكن ساري، وتجديده تلقائيًا عند قرب انتهائه.
+  Input: conn (الاتصال المحفوظ مع توكناته المشفرة).
+  Processing: إن بقي أقل من 5 دقائق نطلب توكنًا جديدًا من Polar
+              (باستخدام التوكن المنعّش) ثم نحفظ الجديد مشفّرًا.
+  Output: توكن وصول ساري.
+  يستدعيها: sync (في نفس الصنف).
+  ماذا تستدعي: decryptText/encryptText + prisma + fetch.
+  -----------------------------------------
+  */
   private async refreshIfNeeded(conn: {
     id: string;
     accessToken: string | null;
@@ -80,6 +172,21 @@ export class PolarAdapter implements WearableProviderAdapter {
     return data.access_token;
   }
 
+  /*
+  -----------------------------------------
+  الدالة الداخلية: ensureUser
+  -----------------------------------------
+  وظيفتها: تسجيل المستخدم لدى Polar وإرجاع معرّفه (polar-user-id).
+           Polar تتطلب هذا التسجيل قبل قراءة أي بيانات.
+  Input: token (توكن وصول ساري).
+  Processing: نرسل طلب POST فارغًا إلى /users. النجاح (200 أو 201)
+              يعيد معرّف المستخدم. التكرار آمن — Polar تعيد نفس
+              المعرّف لنفس المستخدم.
+  Output: نص polar-user-id.
+  يستدعيها: sync (في نفس الصنف).
+  ماذا تستدعي: fetch.
+  -----------------------------------------
+  */
   /** تسجيل المستخدم لدى Polar وإرجاع polar-user-id (آمن التكرار). */
   private async ensureUser(token: string): Promise<string> {
     const res = await fetch(`${POLAR_BASE}/users`, {
@@ -94,6 +201,9 @@ export class PolarAdapter implements WearableProviderAdapter {
     return String(data['polar-user-id'] ?? '');
   }
 
+  // polarGet: دالة مساعدة داخلية ترسل طلب GET إلى Polar بحامل
+  // التوكن. الأيام بلا بيانات تعيد أخطاء بلا نتيجة — نتجاهلها
+  // ({}).
   private async polarGet(path: string, token: string): Promise<Record<string, unknown> | Array<Record<string, unknown>>> {
     const res = await fetch(`${POLAR_BASE}${path}`, { headers: { Authorization: `Bearer ${token}` } });
     if (res.status === 401) throw new Error('توكن Polar غير صالح — أعد الربط.');
@@ -101,6 +211,8 @@ export class PolarAdapter implements WearableProviderAdapter {
     return res.json() as Promise<Record<string, unknown> | Array<Record<string, unknown>>>;
   }
 
+  // mapExercise: دالة مساعدة داخلية — تحوّل تمرين Polar خام إلى
+  // الصيغة الموحّدة (تصنيف الرياضة + المدة + المسافة + النبض).
   private mapExercise(e: Record<string, unknown>): Record<string, unknown> {
     const sportType = mapPolarSport(String(e.sport ?? ''));
     const startTime = String(e.start_time ?? '');
@@ -119,6 +231,18 @@ export class PolarAdapter implements WearableProviderAdapter {
     };
   }
 
+  /*
+  -----------------------------------------
+  الدالة: getWorkouts
+  -----------------------------------------
+  وظيفتها: جلب تدريبات آخر 30 يومًا من Polar.
+  Input: token (توكن وصول ساري).
+  Processing: نطلب /exercises ثم نترجم كل عنصر عبر mapExercise.
+  Output: قائمة بالصيغة الموحّدة.
+  يستدعيها: sync (في نفس الصنف).
+  ماذا تستدعي: polarGet + mapExercise.
+  -----------------------------------------
+  */
   /** جلب تدريبات آخر ٣٠ يومًا. */
   async getWorkouts(token: string): Promise<Record<string, unknown>[]> {
     const start = new Date(Date.now() - 30 * 24 * 3600 * 1000);
@@ -128,6 +252,21 @@ export class PolarAdapter implements WearableProviderAdapter {
     return list.map((e) => this.mapExercise(e as Record<string, unknown>));
   }
 
+  /*
+  -----------------------------------------
+  الدالة: sync
+  -----------------------------------------
+  وظيفتها: مزامنة شاملة لآخر 7 أيام من Polar.
+  Input: userId + التوكن (نهمله لأننا نقرأ من القاعدة).
+  Processing: نجلب الاتصال المحفوظ ونضمن توكنًا ساريًا ونُسجّل
+              المستخدم، ثم لكل يوم نجلب النشاط والنوم والنبض والوزن
+              (كل طلب داخل try منفصل — أي فشل لا يوقف الباقي)،
+              ثم نجلب التدريبات.
+  Output: ProviderHealthData (نشاط + تدريبات + وزن).
+  يستدعيها: sync.ts عبر runSyncConnection.
+  ماذا تستدعي: refreshIfNeeded + ensureUser + getWorkouts + polarGet.
+  -----------------------------------------
+  */
   /** مزامنة شاملة لآخر ٧ أيام: تدريبات + نشاط + نوم + نبض + وزن. */
   async sync(userId: string, _token: string | null): Promise<ProviderHealthData> {
     const conn = await prisma.wearableConnection.findFirst({

@@ -1,5 +1,45 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/services/supplements/types.ts
+
+وظيفة الملف:
+"الأنواع المشتركة لحاسبة المكملات" — كل الأشكال (interfaces)
+التي تتبادلها وحدات المكملات فيما بينها: صف التغطية، سياق الأهلية،
+نتيجة البروتين، الترطيب، الجدول، ومدخلات/مخرجات التقييم الكامل.
+
+لماذا نحتاجه؟
+تحديد شكل البيانات مرة واحدة يمنع الأخطاء ويجعل كل الوحدات تفهم
+بعضها: الوحدة التي تحسب والوحدة التي تعرض تستخدمان نفس الشكل.
+
+متى يعمل؟
+وقت الترجمة فقط (TypeScript) — لا يحتوي منطقًا تشغيليًا.
+
+من يستدعي هذا الملف؟
+- كل ملفات supplements (coverage/eligibility/protein/hydration/schedule/assessment).
+- الصفحات وواجهات API التي تعرض نتائج المكملات.
+
+ملاحظة مهمة:
+هذا الملف يضم الأنواع فقط، والشكل النصي الوحيد هنا هو
+ELIGIBILITY_VERDICTS (أسماء الحالات النهائية بمعانيها العربية).
+
+ترتيب العمل:
+تعريف الأنواع الأساسية (صف التغطية، الأهلية) ↓
+نتائج الحسابات الفرعية (بروتين، ترطيب، جدول) ↓
+مدخلات ومخرجات التقييم الكامل
+==================================================
+*/
+
 /** أنواع ومخرجات حاسبة المكملات الذكية — تغذية فقط، لا وصفات علاجية. */
 
+// ========================================
+// 1. تغطية الاحتياجات
+// ========================================
+
+// صف واحد يلخص تغطية عنصر غذائي: المطلوب، المتناول، العجز، النسب، والحد الأعلى.
 export interface NutrientRow {
   key: string;
   nameAr: string;
@@ -16,13 +56,20 @@ export interface NutrientRow {
   limitStatus: 'none' | 'ok' | 'approaching' | 'exceeded';
 }
 
+// تصنيف نسبة التغطية: منخفضة / تحتاج تحسينًا / مناسبة / مراجعة الزيادة.
 export type CoverageClass = 'low' | 'improve' | 'ok' | 'review';
 
+// نتيجة فحص الحد الأعلى: الحالة + الكمية المتبقية حتى الحد.
 export interface UpperLimitResult {
   status: 'ok' | 'approaching' | 'exceeded';
   remainingToLimit: number | null;
 }
 
+// ========================================
+// 2. سياق الأهلية ونتيجته
+// ========================================
+
+// كل المعلومات التي يستخدمها محرك الأهلية لفحص مكمل واحد.
 export interface EligibilityContext {
   isMinor: boolean;
   guardianConsent: boolean;
@@ -41,6 +88,7 @@ export interface EligibilityContext {
   hasRelevantLab: boolean;
 }
 
+// نتيجة فحص الأهلية: مسموح؟ + الحالة + الأسباب + أعلام (مطلوب طبيب/تحليل...).
 export interface EligibilityResult {
   ok: boolean;
   verdict: string; // one of ELIGIBILITY_VERDICTS
@@ -48,6 +96,7 @@ export interface EligibilityResult {
   flags: { needsGuardian: boolean; needsLab: boolean; needsDoctor: boolean; competitionRestricted: boolean; dopingRestricted: boolean };
 }
 
+// أسماء الحالات النهائية بمعانيها العربية (تُستخدم في العروض).
 export const ELIGIBILITY_VERDICTS: Record<string, string> = {
   suitable: 'مناسب للتقييم الغذائي',
   'food-sufficient': 'الغذاء الطبيعي كافٍ ولا توجد حاجة واضحة',
@@ -65,6 +114,11 @@ export const ELIGIBILITY_VERDICTS: Record<string, string> = {
   'competition-blocked': 'ممنوع قبل البطولة — لم يُجرَّب خلال التدريب',
 };
 
+// ========================================
+// 3. نتائج الحسابات الفرعية
+// ========================================
+
+// نتيجة حساب فجوة البروتين: العجز + خيارات غذائية + جزء المسحوق.
 export interface ProteinGapResult {
   requirementG: number;
   fromFoodG: number;
@@ -76,6 +130,7 @@ export interface ProteinGapResult {
   note: string;
 }
 
+// نتيجة حساب الترطيب: فقدان الوزن، التعرق، السوائل، والتحذيرات.
 export interface HydrationResult {
   weightLossKg: number;
   weightLossPct: number;
@@ -87,6 +142,7 @@ export interface HydrationResult {
   warnings: string[];
 }
 
+// سطر في الجدول اليومي: الوقت + المكمل + الجرعة + السبب.
 export interface ScheduleRow {
   time: string;
   item: string;
@@ -97,6 +153,11 @@ export interface ScheduleRow {
   onCompetitionDay: boolean;
 }
 
+// ========================================
+// 4. مدخلات ومخرجات التقييم الكامل
+// ========================================
+
+// كل بيانات السباح التي يدخلها النظام إلى التقييم الشامل.
 export interface SupplementAssessmentInput {
   profileId: string | null;
   isMinor: boolean;
@@ -140,6 +201,7 @@ export interface SupplementAssessmentInput {
   labResults: { marker: string; value: number; unit: string; referenceRange: string | null; markerAr: string | null }[];
 }
 
+// مخرجات التقييم الشامل: التغطية، الأهلية، التوصيات، الجدول، والملخص.
 export interface SupplementAssessmentOutput {
   version: string;
   overallLevel: 'none' | 'low' | 'medium' | 'specialist';

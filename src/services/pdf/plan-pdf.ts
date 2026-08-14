@@ -1,28 +1,91 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/services/pdf/plan-pdf.ts
+
+وظيفة الملف:
+"توليد PDF عربي احترافي للخطط الغذائية" — يبني مستندًا كاملًا
+(ترويسة الأكاديمية، بيانات السباح، السعرات والمغذيات، جداول
+الوجبات، البدائل، قائمة المشتريات، توصيات البطولة، إخلاء المسؤولية،
+والتوقيع)، عبر مكتبة pdfmake بخط Cairo.
+كما يحتوي أدوات مشتركة يعتمد عليها ملفا PDF الآخران:
+- getPdfPrinter و getLogoDataUri: تهيئة الطابعة والشعار (بلا تكرار).
+- toRtl و applyRtlNode: جعل النصوص العربية تُعرض من اليمين لليسار.
+
+لماذا نحتاجه؟
+حتى يحصل السباح على خطة غذائية قابلة للطباعة بشكل منسق واحترافي.
+
+متى يعمل؟
+عند طلب تحميل/طباعة خطة غذائية من حساب السباح أو الأدمن.
+
+من يستدعي هذا الملف؟
+- واجهات API التي تصدر الخطة PDF.
+- admin-report-pdf.ts و supplement-pdf.ts (دوالهما المساعدة).
+
+الملفات التي يتعامل معها:
+- pdfmake (مكتبة خارجية) + خط Cairo المحلي (src/services/pdf/fonts).
+- fs و path (مكتبات Node) لقراءة الشعار والخط من القرص.
+- مجلد public/images → academy-logo.png.
+
+ترتيب العمل:
+تأتي بيانات الخطة (PdfPlanData) ↓
+تهيئة الطابعة بالخط وتحميل الشعار ↓
+إنشاء رمز QR للخطة الرقمية (اختياري) ↓
+تجميع الوجبات حسب اليوم وبناء جداولها ↓
+بناء مستند pdfmake كامل ↓
+تطبيق RTL على كل النصوص ↓
+تجميع التدفق في Buffer جاهز للتحميل
+
+ملاحظة مهمة:
+هذه طبقة "منطق أعمال" للعرض فقط، والخطة إرشادية تقديرية
+وليست تشخيصًا أو علاجًا (مذكور داخل المستند نفسه).
+==================================================
+*/
+
 /**
  * توليد PDF عربي احترافي للخطط الغذائية عبر pdfmake مع خط Cairo.
  * ملاحظة: pdfmake لا يدعم استيراد واجهات JSON من نسخة TS مباشرة،
  * لذا نستخدم واجهة مناسبة للنسخة 0.2.
  */
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// path و fs: مكتبات Node.js لقراءة مسارات الملفات (الخط والشعار) من القرص.
 import path from 'path';
 import fs from 'fs';
+// pdfmake: مكتبة خارجية لتوليد PDF برمجيًا.
 import PdfPrinter from 'pdfmake';
 
+// ========================================
+// 2. المتغيرات العامة (تهيئة مرة واحدة)
+// ========================================
+
+// نخزن الطابعة هنا حتى لا نعيد إنشاءها مع كل طلب (تحسين أداء).
 let printerInstance: PdfPrinter | null = null;
 
+// نخزن الشعار هنا بعد أول قراءة (undefined = لم يُقرأ بعد، null = فشل).
 let logoDataUri: string | null | undefined;
 
 /** لوجو الأكاديمية كـ data URI لدمجه في رأس ملفات PDF (مع التخزين المؤقت). */
 export function getLogoDataUri(): string | null {
+  // إن سبق قراءته نعيده فورًا دون إعادة قراءة القرص.
   if (logoDataUri !== undefined) return logoDataUri;
   try {
+    // مسار الشعار داخل مجلد public، ثم تحويله إلى base64 data URI.
     const p = path.join(process.cwd(), 'public', 'images', 'academy-logo.png');
     logoDataUri = `data:image/png;base64,${fs.readFileSync(p).toString('base64')}`;
   } catch {
+    // لو لم يوجد الشعار نضع null ونكمل بدون شعار.
     logoDataUri = null;
   }
   return logoDataUri;
 }
 
+// يُهيئ كائن الطابعة مرة واحدة فقط (مع خط Cairo لكل الأوزان).
 export function getPdfPrinter(): PdfPrinter {
   if (!printerInstance) {
     const cairoPath = path.join(process.cwd(), 'src', 'services', 'pdf', 'fonts', 'Cairo.ttf');
@@ -33,6 +96,12 @@ export function getPdfPrinter(): PdfPrinter {
   return printerInstance;
 }
 
+// ========================================
+// 3. أنواع البيانات
+// ========================================
+
+// كل بيانات الخطة التي يحتاجها الملف: بيانات السباح، الوجبات،
+// قائمة المشتريات، ملاحظات السلامة، وتفاصيل التصدير.
 export interface PdfPlanData {
   swimmerName: string;
   swimmerImage?: string;
@@ -62,6 +131,11 @@ export interface PdfPlanData {
   supplementsSection?: string[];
 }
 
+// ========================================
+// 4. الثوابت والأدوات المساعدة
+// ========================================
+
+// ألوان الهوية البصرية للأكاديمية (أزرق محيطي، ذهبي...).
 const color = {
   ocean: '#0e3552',
   oceanLight: '#155480',
@@ -70,6 +144,7 @@ const color = {
   line: '#cbd5e1',
 };
 
+// تنسيق خلية جدول: نص بحجم 9 مع خيارات لون ومحاذاة.
 function cell(text: string | number, opts: { bold?: boolean; color?: string; align?: string } = {}) {
   return {
     text: String(text),
@@ -81,16 +156,35 @@ function cell(text: string | number, opts: { bold?: boolean; color?: string; ali
 }
 
 /** هل النص يحتوي على حروف عربية؟ */
+// فحص النص بمجموعة رموز يونيكود الخاصة بالعربية.
 function isArabic(s: string): boolean {
   return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(s);
 }
 
+// ========================================
+// 5. معالجة النص العربي (RTL)
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: toRtl
+-----------------------------------------
+وظيفتها: عكس ترتيب كلمات السطر العربي ليُعرض يمينًا في PDF.
+لماذا؟ pdfmake لا يدعم الاتجاه من اليمين لليسار أصلًا،
+فنعكس ترتيب الكلمات يدويًا (الأشكال الحرفية يعالجها PDFKit).
+Input: نص.
+Processing: عكس كلمات كل سطر عربي، وإبقاء الأسطر اللاتينية/الرقمية كما هي.
+Output: نص معكوس الترتيب.
+من يستدعيها؟ applyRtlNode وملفات PDF الأخرى.
+-----------------------------------------
+*/
 /**
  * إعادة ترتيب النص العربي ليعرض من اليمين إلى اليسار داخل PDF.
  * pdfmake لا يدعم RTL أصلًا، لذا نعكس ترتيب الكلمات لكل سطر عربي
  * مع إبقاء الأسطر اللاتينية/الرقمية كما هي (الأشكال الحرفية يعالجها PDFKit).
  */
 export function toRtl(text: string): string {
+  // نص فارغ أو لاتيني → نعيده كما هو.
   if (!text || !isArabic(text)) return text;
   return text
     .split('\n')
@@ -98,10 +192,22 @@ export function toRtl(text: string): string {
     .join('\n');
 }
 
+/*
+-----------------------------------------
+الدالة: applyRtlNode
+-----------------------------------------
+وظيفتها: التجول في شجرة مستند pdfmake وعكس كل النصوص العربية.
+Processing: تمرر كل عقدة (كائن/مصفوفة) وتفحص حقل text فقط،
+دون لمس الصور أو الأرقام أو الخصائص الأخرى.
+Output: تعديل في نفس الكائن (بلا قيمة مرجعة).
+من يستدعيها؟ plan-pdf و admin-report-pdf و supplement-pdf.
+-----------------------------------------
+*/
 /** تجول في شجرة المستند وعكس النصوص العربية (دون لمس الصور/الأرقام). */
 export function applyRtlNode(node: unknown): void {
   if (!node || typeof node !== 'object') return;
   const n = node as Record<string, unknown>;
+  // إن كان للعقدة نص نعكسه، ثم نتعمق في باقي الحقول.
   if (typeof n.text === 'string') n.text = toRtl(n.text);
   for (const key of Object.keys(n)) {
     const v = n[key];
@@ -110,10 +216,32 @@ export function applyRtlNode(node: unknown): void {
   }
 }
 
+// ========================================
+// 6. الدالة الرئيسية: بناء الخطة PDF
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: buildPlanPdf
+-----------------------------------------
+وظيفتها: بناء مستند PDF كامل للخطة الغذائية.
+Input: PdfPlanData (كل بيانات الخطة).
+Processing:
+  1. تهيئة الطابعة وإنشاء QR للرابط الرقمي (اختياري).
+  2. تجميع الوجبات حسب اليوم وبناء جدول لكل يوم.
+  3. بناء المستند: ترويسة، بيانات، سعرات، جداول، بدائل، مشتريات، سلامة.
+  4. تطبيق RTL على المحتوى والتذييل.
+  5. تجميع التدفق في Buffer.
+Output: Buffer (ملف PDF).
+من يستدعيها؟ واجهة تصدير الخطة.
+ماذا تستدعي هي؟ getPdfPrinter، getLogoDataUri، applyRtlNode، sectionHeader، keyValue، macroBox، cell.
+-----------------------------------------
+*/
 export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
   const printer = getPdfPrinter();
 
   // QR لفتح الخطة الرقمية (اختياري — عند توفر رابط)
+  // نجلب صورة QR من خدمة خارجية عبر fetch مع مهلة 5 ثوانٍ.
   let qrImage: string | null = null;
   if (data.planUrl) {
     try {
@@ -131,14 +259,17 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
   }
 
   // تجميع الوجبات حسب اليوم
+  // نستخدم Map بحيث مفتاحه رقم اليوم وقيمته قائمة وجبات ذلك اليوم.
   const days = new Map<number, typeof data.meals>();
   data.meals.forEach((m) => {
     if (!days.has(m.day)) days.set(m.day, []);
     days.get(m.day)!.push(m);
   });
 
+  // بناء جدول لكل يوم: صف لكل وجبة (توقيت، سعرات، مكونات، عنوان، رقم اليوم).
   const dayTables = Array.from(days.entries()).map(([day, meals]) => {
     const rows = meals.map((m) => {
+      // نص المكونات: اسم + كمية لكل عنصر، مع طريقة التحضير إن وُجدت.
       const itemText = m.items.map((it) => `${it.name} (${it.qty})`).join('\n');
       const prepText = m.note
         ? `طريقة التحضير والتجهيز:\n${m.note}`
@@ -151,6 +282,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
         headerRows: 1,
         widths: ['20%', '12%', '44%', '16%', '8%'],
         body: [
+          // صف الترويسة مع خلفية فاتحة.
           [cell('التوقيت', { bold: true, color: color.oceanLight }), cell('سعرات', { bold: true, color: color.oceanLight }), cell('المكونات والكميات', { bold: true, color: color.oceanLight }), cell('الوجبة', { bold: true, color: color.oceanLight }), cell('اليوم', { bold: true, color: color.oceanLight })].map((c) => ({ ...(c as object), fillColor: '#eef2f6' })),
           ...rows,
         ],
@@ -159,6 +291,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
     } as object;
   });
 
+  // مستند pdfmake الكامل: معلومات، صفحة A4، محتوى مقسم لأقسام.
   const doc = {
     info: {
       title: `الخطة الغذائية — ${data.swimmerName}`,
@@ -168,7 +301,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
     pageSize: 'A4',
     pageMargins: [36, 90, 36, 50] as [number, number, number, number],
     content: [
-      // الترويسة
+      // الترويسة: تاريخ الإصدار + اسم الأكاديمية + الشعار + خط ذهبي.
       {
         columns: [
           {
@@ -197,7 +330,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
       { text: `السباح: ${data.swimmerName}`, fontSize: 11, bold: true, alignment: 'center', margin: [0, 0, 0, 2] },
       { text: `مدة الخطة: ${data.planDuration}${data.goal ? ` · الهدف: ${data.goal}` : ''}`, fontSize: 9, color: color.slate, alignment: 'center', margin: [0, 0, 0, 14] },
 
-      // البيانات الشخصية
+      // البيانات الشخصية: عمودان (تدريب واحتياجات / بيانات السباح).
       {
         columns: [
           { width: '50%', stack: [sectionHeader('التدريب والاحتياجات'), keyValue('مستوى السباح', data.level), keyValue('تمرينات سباحة/أسبوع', data.swimSessions), keyValue('تمرينات لياقة/أسبوع', data.gymSessions), keyValue('احتياج الماء اليومي', data.waterMl ? `${(data.waterMl / 1000).toFixed(1)} لتر` : '—')] },
@@ -207,7 +340,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
         margin: [0, 0, 0, 10],
       } as object,
 
-      // السعرات والمغذيات
+      // السعرات والمغذيات: ثلاثة صناديق (كارب/دهون، بروتين، سعرات).
       {
         columns: [
           { width: '34%', stack: [macroBox('كربوهيدرات / دهون', `${data.carbsG ?? '—'} جم / ${data.fatG ?? '—'} جم`)] },
@@ -218,11 +351,11 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
         margin: [0, 0, 0, 16],
       } as object,
 
-      // جدول الوجبات
+      // جدول الوجبات: عنوان ثم جداول الأيام.
       { text: 'جدول الوجبات', fontSize: 13, bold: true, color: color.ocean, margin: [0, 0, 0, 8] },
       ...dayTables,
 
-      // البدائل
+      // البدائل: تنبيه بصلاحية استبدال المكونات من نفس المجموعة.
       {
         stack: [
           sectionHeader('البدائل الغذائية'),
@@ -230,7 +363,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
         ],
       },
 
-      // قائمة المشتريات
+      // قائمة المشتريات: عمودان (سلامة الطعام / قائمة المشتريات الأسبوعية).
       {
         columns: [
           {
@@ -252,7 +385,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
         margin: [0, 0, 0, 10],
       } as object,
 
-      // توصيات البطولة
+      // توصيات البطولة: تظهر فقط إن وُجدت نصائح مسجلة.
       ...(data.competitionNotes && data.competitionNotes.length > 0
         ? [
             {
@@ -266,7 +399,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
           ]
         : []),
 
-      // المكملات التثقيفية (اختياري)
+      // المكملات التثقيفية (اختياري): قسم تعليمي عام فقط.
       ...(data.includeSupplements && data.supplementsSection && data.supplementsSection.length > 0
         ? [
             {
@@ -280,7 +413,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
           ]
         : []),
 
-      // إخلاء المسؤولية
+      // إخلاء المسؤولية: توضيح أن الخطة إرشادية وليست تشخيصًا أو علاجًا.
       {
         stack: [
           { text: 'إخلاء مسؤولية طبية', fontSize: 10, bold: true, color: color.ocean, margin: [0, 0, 0, 4] },
@@ -289,7 +422,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
         margin: [0, 8, 0, 10],
       },
 
-      // التوقيع
+      // التوقيع: خط فاصل + قسم الإعداد والإشراف + رمز QR للخطة الرقمية.
       {
         canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.8, lineColor: color.line }],
         margin: [0, 4, 0, 12],
@@ -312,6 +445,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
   } as object;
 
   // تطبيق اتجاه RTL على كل نصوص المستند
+  // نمرر على كل عنصر في المحتوى، وكذلك نلف تذييل الصفحات ليعكسه.
   const rtlDoc = doc as Record<string, unknown>;
   (rtlDoc.content as unknown[]).forEach((item) => applyRtlNode(item));
   if (rtlDoc.footer) {
@@ -323,6 +457,7 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
     };
   }
 
+  // تشغيل الطابعة وتجميع أجزاء الملف في Buffer.
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
     const stream = printer.createPdfKitDocument(rtlDoc as unknown as Parameters<PdfPrinter['createPdfKitDocument']>[0]);
@@ -333,10 +468,16 @@ export async function buildPlanPdf(data: PdfPlanData): Promise<Buffer> {
   });
 }
 
+// ========================================
+// 7. دوال تنسيق مساعدة
+// ========================================
+
+// عنوان قسم داخل المستند (بخط كبير وبلون الأكاديمية).
 function sectionHeader(text: string) {
   return { text, fontSize: 12, bold: true, color: color.ocean, margin: [0, 0, 0, 6] } as object;
 }
 
+// صف "مفتاح: قيمة" للبيانات الشخصية (يعرض — عند غياب القيمة).
 function keyValue(k: string, v: string | number | null | undefined) {
   return {
     text: `${k}: ${v ?? '—'}`,
@@ -346,6 +487,7 @@ function keyValue(k: string, v: string | number | null | undefined) {
   } as object;
 }
 
+// صندوق لعرض مغذٍ كبير (تسمية + قيمة بخط عريض داخل حدود).
 function macroBox(label: string, value: string) {
   return {
     stack: [

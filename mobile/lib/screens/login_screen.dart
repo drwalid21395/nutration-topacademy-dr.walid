@@ -111,10 +111,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         : const Text('دخول'),
                   ),
                   const SizedBox(height: 16),
-                  Text(
+                  const Text(
                     'الخادم: ${AppConfig.apiBase}',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                    style: TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                 ],
               ),

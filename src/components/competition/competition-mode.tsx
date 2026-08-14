@@ -1,6 +1,59 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/competition/competition-mode.tsx
+
+وظيفة الملف:
+وضع البطولة — تجهيز غذائي كامل للمنافسة:
+- عرض البطولة المسجلة (اسم، تاريخ، مكان) مع عدّاد تنازلي للأيام.
+- إنشاء 3 خطط غذائية مرتبطة بالبطولة:
+  1. competitionPrep: خطة الاستعداد (قبل البطولة).
+  2. competitionDay: خطة يوم المنافسة.
+  3. postCompetition: خطة الاستشفاء بعدها.
+- قائمة تحقق للمعدات وإرشادات الليلة السابقة.
+- نموذج تسجيل بطولة جديدة (اسم/تاريخ/مكان/عدد السباقات).
+
+لماذا نحتاجه؟
+التغذية في البطولة تختلف جذريًا عن التدريب العادي —
+السباح يحتاج استعدادًا خاصًا قبل، وتغذية دقيقة يوم المنافسة،
+واستشفاء بعدها. هذا الملف يجمعها في شاشة واحدة.
+
+'use client':
+يعمل في المتصفح لأنه يستخدم useState وuseEffect ونماذج.
+
+متى يعمل؟
+عند فتح /competition-mode.
+
+من يستدعي هذا الملف؟
+src/app/competition-mode/page.tsx.
+
+الملفات التي يتعامل معها:
+- API: /api/competition (GET/POST/DELETE) و/api/plan (POST لإنشاء الخطة).
+- مكونات: Button، Input/Field، Card، Badge، Alert، EmptyState، ProgressBar.
+- lib/utils: formatDate، formatNumber.
+- lucide-react: أيقونات كثيرة.
+
+ترتيب العمل:
+1. نجلب بيانات البطولة الحالية من /api/competition ↓
+2. لو لا يوجد ملف سباح → رسالة لاستكماله أولًا ↓
+3. لو قاصر → تنبيه إرشادي فقط ↓
+4. نعرض البطولة وخططها الثلاث (أو نموذج إنشائها) ↓
+5. نموذج تسجيل بطولة جديدة
+==================================================
+*/
+
 'use client';
 
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// useEffect (تحميل أولي)، useState (حالة متغيرة).
 import { useEffect, useState } from 'react';
+// أيقونات من lucide-react.
 import {
   Trophy,
   CalendarDays,
@@ -17,24 +70,45 @@ import {
   Utensils,
   RefreshCw,
 } from 'lucide-react';
+// Link: روابط لعرض الخطة وتحميل PDF.
 import Link from 'next/link';
+// Button: زر جاهز.
 import { Button } from '@/components/ui/button';
+// مكونات النموذج.
 import { Input, Field } from '@/components/ui/forms';
+// مكونات واجهة.
 import { Card, Badge, Alert, EmptyState, ProgressBar } from '@/components/ui';
+// أدوات مساعدة: تنسيق التاريخ والأرقام.
 import { formatDate, formatNumber } from '@/lib/utils';
 
+// ========================================
+// 2. إعدادات ثابتة (ألوان وعناوين الخطط)
+// ========================================
+
+// DAY_COLORS: لون كل نوع خطة (يظهر في الدائرة الملونة).
 const DAY_COLORS: Record<string, string> = {
   competitionPrep: 'bg-ocean-500',
   competitionDay: 'bg-gold-500',
   postCompetition: 'bg-lagoon-500',
 };
 
+// PLAN_LABELS: الاسم العربي لكل نوع خطة.
 const PLAN_LABELS: Record<string, string> = {
   competitionPrep: 'خطة الاستعداد',
   competitionDay: 'خطة يوم البطولة',
   postCompetition: 'خطة الاستشفاء',
 };
 
+// ========================================
+// 3. المكوّن الرئيسي: CompetitionMode
+// ========================================
+
+// CompetitionMode: صفحة وضع البطولة.
+// Props (تأتي من صفحة /competition-mode بعد فحص الخادم):
+// - hasProfile: هل أكمل السباح ملفه الأساسي؟
+// - isMinor: هل هو قاصر (أقل من 18)؟ نعرض تنبيهًا خاصًا.
+// - profileName: اسم السباح من ملفه.
+// - nextCompetitionDate: تاريخ البطولة القادمة.
 export function CompetitionMode({
   hasProfile,
   isMinor,
@@ -46,13 +120,17 @@ export function CompetitionMode({
   profileName: string | null;
   nextCompetitionDate: string | null;
 }) {
+  // data: بيانات البطولة والخطط من الخادم.
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  // form: حقول نموذج تسجيل البطولة.
   const [form, setForm] = useState({ name: '', date: '', location: '', racesCount: '' });
   const [error, setError] = useState<string | null>(null);
+  // created: أنواع الخطط التي أُنشئت للتو (لعرض رسالة النجاح).
   const [created, setCreated] = useState<string[]>([]);
 
+  // load: جلب كل بيانات وضع البطولة.
   const load = async () => {
     const res = await fetch('/api/competition');
     const d = await res.json();
@@ -60,10 +138,12 @@ export function CompetitionMode({
     setLoading(false);
   };
 
+  // عند أول ظهور نجلب البيانات.
   useEffect(() => {
     load();
   }, []);
 
+  // create: حفظ بطولة جديدة من النموذج.
   async function create(e: React.FormEvent) {
     e.preventDefault();
     setCreating(true);
@@ -84,17 +164,21 @@ export function CompetitionMode({
       setError(d.error ?? 'تعذر الحفظ');
       return;
     }
-    setForm({ name: '', date: '', location: '', racesCount: '' });
+    setForm({ name: '', date: '', location: '', racesCount: '' }); // مسح النموذج.
     load();
   }
 
+  // removeCompetition: حذف البطولة الحالية.
   async function removeCompetition(id: string) {
     await fetch(`/api/competition?id=${id}`, { method: 'DELETE' });
     load();
   }
 
+  // countdown: عدد الأيام المتبقية على البطولة (لا ينزل تحت صفر).
+  // 86400000 = عدد المللي ثانية في اليوم الواحد.
   const countdown = data?.competition?.startDate ? Math.max(0, Math.ceil((new Date(data.competition.startDate).getTime() - Date.now()) / 86400000)) : null;
 
+  // الحالة 1: لا ملف سباح → نطلب استكماله أولًا.
   if (!hasProfile) {
     return (
       <EmptyState
@@ -111,6 +195,7 @@ export function CompetitionMode({
     );
   }
 
+  // الحالة 2: قاصر → تنبيه إرشادي (الخطط إرشادية فقط).
   if (isMinor) {
     return (
       <Alert variant="warning" title="للرياضيين القاصرين">
@@ -121,6 +206,7 @@ export function CompetitionMode({
 
   return (
     <div>
+      {/* رأس الصفحة + عدّاد الأيام المتبقية */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-ocean-900">وضع البطولة</h1>
@@ -156,10 +242,12 @@ export function CompetitionMode({
             <p className="py-8 text-center text-sm text-slate-400">جارٍ التحميل…</p>
           ) : data?.competition ? (
             <div className="space-y-4">
+              {/* بطاقة بيانات البطولة */}
               <div className="rounded-2xl border border-gold-200 bg-gold-300/10 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-black text-ocean-900">{data.competition.name}</h3>
+                    {/* التاريخ والمكان */}
                     <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
                       <CalendarDays className="h-4 w-4" />
                       {formatDate(data.competition.startDate)}
@@ -173,6 +261,7 @@ export function CompetitionMode({
                     </p>
                     <p className="mt-1 text-sm text-slate-500">السباح: {profileName ?? '—'}</p>
                   </div>
+                  {/* حذف البطولة */}
                   <button onClick={() => removeCompetition(data.competition.id)} className="rounded-lg px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50">
                     حذف البطولة
                   </button>
@@ -184,19 +273,23 @@ export function CompetitionMode({
                 )}
               </div>
 
+              {/* خطط البطولة الثلاث */}
               <div>
                 <h3 className="mb-3 text-sm font-bold text-ocean-900">خطط البطولة</h3>
                 <div className="space-y-2.5">
                   {(['competitionPrep', 'competitionDay', 'postCompetition'] as const).map((type) => {
+                    // plan: الخطة الموجودة من هذا النوع (أو undefined).
                     const plan = data.plans?.find((p: any) => p.planType === type);
                     return (
                       <div key={type} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
                         <div className="flex items-center gap-3">
+                          {/* دائرة ملونة بنوع الخطة */}
                           <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-white ${DAY_COLORS[type]}`}>
                             {type === 'competitionDay' ? <Flame className="h-5 w-5" /> : <Utensils className="h-5 w-5" />}
                           </div>
                           <div>
                             <p className="text-sm font-bold text-slate-800">{PLAN_LABELS[type]}</p>
+                            {/* إن كانت الخطة موجودة نعرض سعراتها وبروتينها */}
                             {plan ? (
                               <p className="text-xs text-slate-500">
                                 {formatNumber(plan.totalCalories ?? 0)} سعرة · {formatNumber(plan.proteinG ?? 0)} جم بروتين
@@ -207,6 +300,7 @@ export function CompetitionMode({
                           </div>
                         </div>
                         {plan ? (
+                          /* الخطة موجودة → روابط عرض وتحميل PDF */
                           <div className="flex gap-2">
                             <Link href={`/plan/${plan.id}`} className="btn-secondary !px-3 !py-1.5 !text-xs">
                               عرض الخطة
@@ -217,6 +311,7 @@ export function CompetitionMode({
                             </Link>
                           </div>
                         ) : (
+                          /* لا خطة → زر إنشاء (يستدعي generatePlan) */
                           <Button size="sm" onClick={() => { setCreated((c) => [...c, type]); generatePlan(type); }} variant="gold">
                             <Sparkles className="h-3.5 w-3.5" />
                             إنشاء
@@ -228,9 +323,11 @@ export function CompetitionMode({
                 </div>
               </div>
 
+              {/* قائمة التحقق وإرشادات الليلة السابقة */}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl bg-slate-50 p-4">
                   <h4 className="mb-2 flex items-center gap-1.5 text-sm font-bold text-ocean-900"><ClipboardList className="h-4 w-4 text-ocean-500" /> قائمة التحقق</h4>
+                  {/* map: عنصر بعلامة صح لكل بند */}
                   <ul className="space-y-1.5 text-xs text-slate-600">
                     {[
                       'شهادات الفحص الطبي والبطاقة الرياضية',
@@ -255,6 +352,7 @@ export function CompetitionMode({
               </div>
             </div>
           ) : (
+            /* لا بطولة مسجلة → رسالة فارغة */
             <EmptyState
               icon={<Trophy className="h-10 w-10" />}
               title="لا توجد بطولة مسجلة"
@@ -263,6 +361,7 @@ export function CompetitionMode({
           )}
         </Card>
 
+        {/* نموذج تسجيل بطولة جديدة */}
         <Card>
           <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-ocean-900">
             <Plus className="h-4 w-4 text-ocean-500" />
@@ -295,6 +394,8 @@ export function CompetitionMode({
     </div>
   );
 
+  // generatePlan: طلب إنشاء خطة من نوع معين عبر /api/plan.
+  // (مُعرّفة بعد return لأننا نستدعيها فقط عند الضغط على "إنشاء").
   async function generatePlan(type: string) {
     const res = await fetch('/api/plan', {
       method: 'POST',

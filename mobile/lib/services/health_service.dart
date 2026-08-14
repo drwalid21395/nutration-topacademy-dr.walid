@@ -104,7 +104,7 @@ class HealthBridge {
   static const _types = [
     HealthDataType.STEPS,
     HealthDataType.ACTIVE_ENERGY_BURNED,
-    HealthDataType.RESTING_ENERGY_BURNED,
+    HealthDataType.BASAL_ENERGY_BURNED,
     HealthDataType.DISTANCE_WALKING_RUNNING,
     HealthDataType.DISTANCE_DELTA,
     HealthDataType.DISTANCE_CYCLING,
@@ -234,8 +234,8 @@ class HealthBridge {
     } catch (_) {}
 
     try {
-      final pts = await _query(const [HealthDataType.RESTING_ENERGY_BURNED], start, end,
-          preferredUnits: const {HealthDataType.RESTING_ENERGY_BURNED: HealthDataUnit.KILOCALORIE});
+      final pts = await _query(const [HealthDataType.BASAL_ENERGY_BURNED], start, end,
+          preferredUnits: const {HealthDataType.BASAL_ENERGY_BURNED: HealthDataUnit.KILOCALORIE});
       resting = _sumNumeric(pts);
     } catch (_) {}
 

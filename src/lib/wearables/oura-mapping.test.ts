@@ -1,3 +1,20 @@
+/*
+=================================================
+ملف اختبار (Test) — تحويلات Oura
+=================================================
+يختبر دوال oura-mapping.ts (تصنيف الرياضة، تحويل الثواني إلى
+دقائق، وتحميل النشاط/النوم/التدريب).
+اسم الملف:
+src/lib/wearables/oura-mapping.test.ts
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// describe/it/expect: من vitest (مكتبة اختبارات خارجية).
+// الدوال: من الملف المحلي ./oura-mapping (الهدف من الاختبار).
 import { describe, it, expect } from 'vitest';
 import {
   mapOuraSport,
@@ -6,6 +23,10 @@ import {
   mapOuraDailySleep,
   mapOuraWorkout,
 } from './oura-mapping';
+
+// ========================================
+// 2. اختبار تصنيف الرياضة
+// ========================================
 
 describe('mapOuraSport', () => {
   it('classifies swimming', () => {
@@ -21,6 +42,10 @@ describe('mapOuraSport', () => {
   });
 });
 
+// ========================================
+// 3. اختبار تحويل الثواني إلى دقائق
+// ========================================
+
 describe('ouraSecondsToMinutes', () => {
   it('converts seconds to minutes', () => {
     expect(ouraSecondsToMinutes(3600)).toBe(60);
@@ -31,6 +56,10 @@ describe('ouraSecondsToMinutes', () => {
     expect(ouraSecondsToMinutes(-10)).toBeUndefined();
   });
 });
+
+// ========================================
+// 4. اختبار تحويل نشاط اليوم
+// ========================================
 
 describe('mapOuraDailyActivity', () => {
   it('maps steps, calories and distance', () => {
@@ -51,6 +80,10 @@ describe('mapOuraDailyActivity', () => {
   });
 });
 
+// ========================================
+// 5. اختبار استخراج النوم
+// ========================================
+
 describe('mapOuraDailySleep', () => {
   it('extracts sleep minutes and HR', () => {
     const out = mapOuraDailySleep({
@@ -63,6 +96,10 @@ describe('mapOuraDailySleep', () => {
     expect(out.restingHeartRate).toBe(50);
   });
 });
+
+// ========================================
+// 6. اختبار تحويل التمرين
+// ========================================
 
 describe('mapOuraWorkout', () => {
   it('maps a swim session', () => {

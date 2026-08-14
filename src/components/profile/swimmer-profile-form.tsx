@@ -1,13 +1,66 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/profile/swimmer-profile-form.tsx
+
+وظيفة الملف:
+نموذج ملف السباح الكامل — مقسّم إلى 3 تبويبات:
+1) البيانات الأساسية (اسم، جنس، عيد ميلاد، طول/وزن، مرحلة، مستوى، تخصص، بطولة)
+2) بيانات التدريب (تمارين، شدّة، مسافات، نوم، راحة، تدريب مزدوج)
+3) الغذاء والصحة (هدف، نظام غذائي، حساسية، أمراض، أدوية، قاصر وولي أمر)
++ رفع صورة شخصية (تصغير في المتصفح ثم حفظها في الخادم).
++ حفظ البيانات وحساب الاحتياجات الغذائية.
+
+لماذا نحتاجه؟
+هذه البيانات هي "عقل" النظام: كل خطة غذائية وتوصيات
+مبنية على ما يُدخله المستخدم هنا.
+
+'use client':
+يعمل في المتصفح لأنه نموذج تفاعلي (useState، رفع صورة، fetch).
+
+متى يعمل؟
+عند فتح /profile أو أول تسجيل دخول (إكمال الملف).
+
+من يستدعي هذا الملف؟
+src/app/profile/page.tsx و src/app/onboarding (أو صفحة إكمال البيانات).
+
+الملفات التي يتعامل معها:
+- API: /api/profile (POST حفظ)، /api/profile/photo (POST رفع صورة).
+- مكوّنات: Button، forms (Input/Select/Textarea/Field/Toggle)، ui (Alert/Card/Badge)، UserAvatar.
+- lib/constants (قوائم الخيارات)، lib/utils (cn)، types (SwimmerFormData).
+- next-auth (useSession لتحديث الجلسة بعد تغيير الصورة).
+
+ترتيب العمل:
+1. نستقبل بيانات السباح الحالية (initial) وصورته واسمه ↓
+2. المستخدم ينتقل بين التبويبات ويملأ البيانات ↓
+3. زر "حفظ" → POST إلى /api/profile ↓
+4. لو وُجدت حالة صحية/قاصر → تحذير "الخطة إرشادية فقط" ↓
+5. زر "حفظ ثم احسب احتياجاتي" → نفس الحفظ ثم الانتقال للحساب
+==================================================
+*/
+
 'use client';
 
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// useRef (حقل ملف مخفي)، useState (حالة النموذج).
 import { useRef, useState } from 'react';
+// useRouter: إعادة رسم الصفحة بعد حفظ الصورة.
 import { useRouter } from 'next/navigation';
+// useSession: تحديث جلسة المستخدم (JWT) بعد تغيير الصورة.
 import { useSession } from 'next-auth/react';
+// أيقونات التبويبات والأزرار.
 import { User, Dumbbell, HeartPulse, Check, Calculator, Camera, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea, Field, Toggle } from '@/components/ui/forms';
 import { Alert, Card, Badge } from '@/components/ui';
 import { UserAvatar } from '@/components/ui/user-avatar';
+// قوائم الخيارات الجاهزة (الأعمار، المستويات، الأهداف، ...).
 import {
   AGE_GROUPS,
   SWIMMER_LEVELS,
@@ -22,16 +75,26 @@ import {
 import { cn } from '@/lib/utils';
 import type { SwimmerFormData } from '@/types';
 
+// ========================================
+// 2. التبويبات الثلاثة
+// ========================================
+
 const TABS = [
   { key: 'basic', label: 'البيانات الأساسية', icon: User },
   { key: 'training', label: 'بيانات التدريب', icon: Dumbbell },
   { key: 'nutrition', label: 'الغذاء والصحة', icon: HeartPulse },
 ];
 
+// numberOrEmpty: تحويل رقم إلى نص للعرض في الحقول
+// (والفارغ يعرض كخلية فارغة بدل "undefined").
 function numberOrEmpty(v: string | number | null | undefined): string {
   if (v === null || v === undefined || v === '') return '';
   return String(v);
 }
+
+// ========================================
+// 3. المكوّن الرئيسي: SwimmerProfileForm
+// ========================================
 
 export function SwimmerProfileForm({
   initial,
@@ -44,13 +107,17 @@ export function SwimmerProfileForm({
 }) {
   const router = useRouter();
   const { update: refreshSession } = useSession();
+  // التبويب المفتوح حاليًا.
   const [tab, setTab] = useState('basic');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // تنبيه طبي: يظهر إن وُجدت حالة صحية أو سباح قاصر.
   const [medicalAlert, setMedicalAlert] = useState<{ on: boolean; message: string } | null>(null);
+  // صورة العرض الحالية (data URI).
   const [avatar, setAvatar] = useState<string | null>(userImage ?? null);
   const [uploading, setUploading] = useState(false);
+  // مرجع لحقل الملف المخفي — نضغط عليه برمجيًا من زر "رفع صورة".
   const fileRef = useRef<HTMLInputElement>(null);
 
   // تصغير الصورة من المتصفح (أقصى 512px) مع ضغط JPEG لضمان وضوح كامل
@@ -84,10 +151,13 @@ export function SwimmerProfileForm({
     });
   }
 
+  // onFilePicked: عند اختيار صورة من الحقل المخفي:
+  // نتحقق من الحجم، نضغطها في المتصفح، نرفعها للخادم، ثم نحدّث الصورة والجلسة.
   async function onFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    // حد أقصى 2 ميجابايت.
     if (file.size > 2 * 1024 * 1024) {
       setError('حجم الصورة يتجاوز 2 ميجابايت');
       return;
@@ -95,7 +165,9 @@ export function SwimmerProfileForm({
     setUploading(true);
     setError(null);
     try {
+      // ضغط الصورة داخل المتصفح (Canvas) → data URI.
       const dataUrl = await fileToResizedDataUrl(file);
+      // رفع الصورة إلى الخادم.
       const res = await fetch('/api/profile/photo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -106,6 +178,7 @@ export function SwimmerProfileForm({
         setError(data.error ?? 'تعذر رفع الصورة');
         return;
       }
+      // نعرض الصورة الجديدة فورًا.
       setAvatar(data.image);
       // تحديث الجلسة (JWT) ثم إعادة رسم الصفحة حتى تظهر الصورة الجديدة
       // في هيدر التطبيق وباقي الصفحات دون الحاجة لتسجيل الخروج والدخول.
@@ -122,6 +195,7 @@ export function SwimmerProfileForm({
     }
   }
 
+  // d: كائن البيانات الكامل للنموذج — يبدأ من initial أو قيم افتراضية.
   const [d, setD] = useState<SwimmerFormData>(
     initial ?? {
       fullName: '',
@@ -131,13 +205,16 @@ export function SwimmerProfileForm({
     }
   );
 
+  // set: دالة مساعدة لتحديث حقل واحد من بيانات النموذج.
   const set = <K extends keyof SwimmerFormData>(k: K, v: SwimmerFormData[K]) =>
     setD((prev) => ({ ...prev, [k]: v }));
 
+  // saveAndFinish: يربطها الزرّان (حفظ / حفظ ثم حساب) — الحفظ نفسه.
   async function saveAndFinish() {
     await doSave();
   }
 
+  // doSave: إرسال كل البيانات إلى الخادم عبر POST /api/profile.
   async function doSave() {
     setSaving(true);
     setError(null);
@@ -154,6 +231,8 @@ export function SwimmerProfileForm({
       return;
     }
     setSuccess(true);
+    // إن سجّل الخادم حالة صحية أو قاصرًا: نعرض تنبيهًا أن الخطة إرشادية فقط
+    // ولا يقدم النظام أي توصيات علاجية أو جرعات.
     if (data.medicalAlert) {
       setMedicalAlert({
         on: true,
@@ -161,11 +240,13 @@ export function SwimmerProfileForm({
           'تم تسجيل حالة صحية أو سباح قاصر. الخطة ستكون إرشادية فقط، ويجب مراجعتها من اختصاصي تغذية رياضية وطبيب عند الحاجة — لن يقدم النظام أي توصيات علاجية أو جرعات.',
       });
     }
+    // نخفي رسالة النجاح بعد 4 ثوانٍ.
     setTimeout(() => setSuccess(false), 4000);
   }
 
   return (
     <div className="space-y-6">
+      {/* أزرار التبويبات الثلاثة — التبويب النشط بلون أزرق ممتلئ */}
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button
@@ -182,6 +263,7 @@ export function SwimmerProfileForm({
         ))}
       </div>
 
+      {/* التنبيهات: طبي، نجاح، خطأ */}
       {medicalAlert?.on && (
         <Alert variant="danger" title="تنبيه طبي" dismissible onDismiss={() => setMedicalAlert(null)}>
           {medicalAlert.message}

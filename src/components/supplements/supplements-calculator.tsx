@@ -1,6 +1,63 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/supplements/supplements-calculator.tsx
+
+وظيفة الملف:
+"حاسبة المكملات الذكية" — أكبر صفحة في التطبيق، تقوم بـ:
+1) جمع بيانات الرياضي (عمر، وزن، هدف، تدريب، أدوية، تحاليل، منتجات).
+2) مقارنة الاحتياجات الغذائية بمتوسط المدخول الفعلي لكشف الفجوات.
+3) تقييم كل مكمل/منتج (بعد إقرار إلزامي) وإنتاج:
+   - تغطية الاحتياجات من الطعام + تحذيرات الحدود العليا.
+   - فجوة البروتين مع بدائل غذائية أولًا.
+   - الترطيب والكهرل، وتوصيات المكملات المفحوصة.
+   - فحص الأهلية والسلامة (تسجل الأدوية والتحاليل لتفادي التداخلات).
+   - جدول مقترح للجرعات، وبدائل غذائية، وإخلاء مسؤولية.
+4) حفظ التقييم لمراجعة مختص (أخصائي تغذية/كوتش/أدمن) مع اعتماد/رفض.
+5) سجل تعاطٍ يومي لتتبع الالتزام والأعراض الجانبية.
+
+لماذا نحتاجه؟
+نظام آمن يرفض إعطاء مكملات دون بيانات: لا حديد/فيتامين د دون تحليل،
+لا قاصر دون موافقة ولي الأمر، ولا نتيجة دون إقرار — والغذاء أولًا دائمًا.
+
+'use client':
+يعمل في المتصفح لأنه تفاعلي بالكامل (نماذج، نوافذ، fetch).
+
+متى يعمل؟
+عند فتح /supplements/calculator.
+
+من يستدعي هذا الملف؟
+src/app/supplements/calculator/page.tsx.
+
+الملفات التي يتعامل معها:
+- API: /api/supplements/context (السياق)، /calculate، /assessments (+ PDF),
+  /approve، /products، /medications، /lab-results، /intake.
+- services/supplements/types (أنواع الإدخال والإخراج).
+- مكوّنات: ui (Card/Alert/Badge/Stat/ProgressBar/Spinner/Modal/EmptyState)،
+  ui/button، ui/forms.
+- lib/constants (نصوص الإقرار والتنبيه والعلامة التجارية).
+
+ترتيب العمل:
+1. تحميل السياق: الملف، الاحتياجات، المنتجات، الأدوية، التحاليل ↓
+2. تعديل البيانات وملء متوسط المدخول ↓
+3. الموافقة على الإقرار الإلزامي ↓
+4. "احسب التقييم" → POST /calculate → عرض النتائج ↓
+5. حفظ التقييم (مع PDF) لمراجعة المختص ↓
+6. المختص يعتمد/يرفض من نافذة الموافقات
+==================================================
+*/
+
 'use client';
 
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+// أيقونات الأقسام والنماذج.
 import {
   Calculator, FlaskConical, Pill, Package, CheckCircle2, XCircle, AlertTriangle,
   Save, RotateCcw, Calendar, Droplets, Beef, ClipboardList, ShieldCheck, FileDown,
@@ -11,11 +68,20 @@ import { Input, Select, Textarea, Field, Toggle } from '@/components/ui/forms';
 import type { SupplementAssessmentInput, SupplementAssessmentOutput } from '@/services/supplements/types';
 import { SUPPLEMENT_ACK_TEXT, SUPPLEMENT_DISCLAIMER, SUPPLEMENT_BRANDING } from '@/lib/constants';
 
+// ========================================
+// 2. أنواع البيانات القادمة من السياق
+// ========================================
+
 type CtxProduct = { id: string; name: string; brand?: string | null; ingredientsJson?: string | null; thirdPartyTested: boolean; dopingRisk: string };
 type CtxMed = { id: string; name: string; purpose?: string | null; dosage?: string | null; frequency?: string | null };
 type CtxLab = { id: string; marker: string; markerAr?: string | null; value: number; unit: string; referenceRange?: string | null; testDate: string };
 type CtxAssessment = Record<string, unknown> & { id: string; status: string; overallLevel: string; createdAt: string; approvals?: { id: string; action: string; approver: { name: string; role: string } }[] };
 
+// ========================================
+// 3. قوائم الاختيار الجاهزة
+// ========================================
+
+// LAB_MARKERS: التحاليل المخبرية المتاحة للإدخال.
 const LAB_MARKERS = [
   { value: 'hemoglobin', label: 'الهيموجلوبين' },
   { value: 'ferritin', label: 'فيريتين' },
@@ -33,6 +99,7 @@ const LAB_MARKERS = [
   { value: 'glucose', label: 'سكر الصائم' },
 ];
 
+// DOPING_OPTIONS: مستويات خطر المنشطات للمنتج.
 const DOPING_OPTIONS = [
   { value: 'none', label: 'لا خطر' },
   { value: 'low', label: 'منخفض' },
@@ -42,6 +109,7 @@ const DOPING_OPTIONS = [
   { value: 'unknown', label: 'غير معروف' },
 ];
 
+// INTENSITIES: شدّة التدريب.
 const INTENSITIES = [
   { value: 'low', label: 'منخفضة' },
   { value: 'moderate', label: 'متوسطة' },
@@ -49,6 +117,7 @@ const INTENSITIES = [
   { value: 'veryHigh', label: 'عالية جدًا' },
 ];
 
+// GOALS: أهداف الرياضي.
 const GOALS = [
   { value: 'maintenance', label: 'تثبيت' },
   { value: 'fatLoss', label: 'خفض دهون' },
@@ -59,18 +128,25 @@ const GOALS = [
   { value: 'weightGain', label: 'زيادة وزن' },
 ];
 
+// ========================================
+// 4. دوال مساعدة
+// ========================================
+
+// num: تحويل أي قيمة نصية إلى رقم (والفارغ/غير الصحيح → 0).
 function num(v: string | number | null | undefined): number {
   if (typeof v === 'number') return v;
   const n = parseFloat(v ?? '');
   return isNaN(n) ? 0 : n;
 }
 
+// statusColor: لون شارة حالة التوصية (غذاء أولًا=أخضر، ممنوع=أحمر).
 function statusColor(status: string): 'green' | 'red' | 'ocean' {
   if (status === 'food-first') return 'green';
   if (status === 'blocked') return 'red';
   return 'ocean';
 }
 
+// coverageBarClass: لون شريط التغطية حسب النسبة المئوية.
 function coverageBarClass(pct: number): 'green' | 'red' | 'gold' | 'ocean' {
   if (pct < 70) return 'red';
   if (pct < 90) return 'gold';
@@ -78,9 +154,15 @@ function coverageBarClass(pct: number): 'green' | 'red' | 'gold' | 'ocean' {
   return 'green';
 }
 
+// ========================================
+// 5. المكوّن الرئيسي: SupplementsCalculator
+// ========================================
+
 export function SupplementsCalculator() {
+  // boot: أثناء تحميل السياق نعرض Spinner.
   const [boot, setBoot] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // userRole: دور المستخدم — يحدد صلاحية الاعتماد.
   const [userRole, setUserRole] = useState('athlete');
 
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
@@ -130,7 +212,7 @@ export function SupplementsCalculator() {
   const [avgSodium, setAvgSodium] = useState('');
   const [avgWater, setAvgWater] = useState('');
 
-  // النتيجة
+  // النتيجة: نتيجة التقييم + حالات الحساب والحفظ.
   const [result, setResult] = useState<SupplementAssessmentOutput | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -155,6 +237,8 @@ export function SupplementsCalculator() {
   const [approveAction, setApproveAction] = useState('approved');
   const [approveNotes, setApproveNotes] = useState('');
 
+  // load: تحميل كل سياق الحساب (الملف، الاحتياجات، المنتجات، الأدوية، التحاليل)
+  // وتعبئة حقول النموذج من البيانات المحفوظة.
   const load = useCallback(async () => {
     const res = await fetch('/api/supplements/context');
     if (!res.ok) {
@@ -265,6 +349,7 @@ export function SupplementsCalculator() {
     })),
   });
 
+  // runCalculation: تشغيل التقييم — يمنع العرض قبل الموافقة على الإقرار.
   const runCalculation = async () => {
     if (!ackConfirmed) {
       setError('يجب قراءة الإقرار والموافقة عليه قبل عرض نتيجة التقييم.');
@@ -289,6 +374,7 @@ export function SupplementsCalculator() {
     }
   };
 
+  // saveAssessment: حفظ التقييم في الخادم ثم تنزيل تقريره PDF تلقائيًا.
   const saveAssessment = async () => {
     if (!result) return;
     setSaving(true);
@@ -456,12 +542,15 @@ export function SupplementsCalculator() {
     await load();
   };
 
+  // أثناء تحميل السياق: مؤشر تحميل فقط.
   if (boot) return <Spinner label="جارٍ تحميل حاسبة المكملات…" />;
 
+  // canApprove: هل يستطيع المستخدم اعتماد التقييمات؟ (المختصون فقط).
   const canApprove = ['dietitian', 'coach', 'admin'].includes(userRole);
 
   return (
     <div className="space-y-8">
+      {/* ترويسة الصفحة */}
       <div className="text-center">
         <h1 className="text-3xl font-extrabold text-ocean-900">حاسبة المكملات الذكية</h1>
         <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-500">
@@ -470,6 +559,7 @@ export function SupplementsCalculator() {
         </p>
       </div>
 
+      {/* التنبيهات العامة */}
       {error && <Alert variant="danger" title="تنبيه">{error}</Alert>}
       {savedMsg && <Alert variant="success" title="تم بنجاح">{savedMsg}</Alert>}
       {isMinor && (
@@ -933,6 +1023,8 @@ export function SupplementsCalculator() {
   );
 }
 
+// parseIngredientJson: تحويل نص مكونات المنتج (JSON) إلى مصفوفة
+// — وإن كان النص تالفًا نرجع قائمة فارغة بدل كسر الصفحة.
 function parseIngredientJson(raw: string | null | undefined): { name: string; amount: number; unit: string }[] {
   if (!raw) return [];
   try {
@@ -942,9 +1034,14 @@ function parseIngredientJson(raw: string | null | undefined): { name: string; am
   }
 }
 
+// ========================================
+// ResultsView: عرض نتائج التقييم (أقسام منفصلة)
+// ========================================
+
 function ResultsView({ result }: { result: SupplementAssessmentOutput }) {
   return (
     <div className="space-y-6">
+      {/* الملخص العام + التحذيرات الشرطية */}
       <Alert
         variant={result.overallLevel === 'none' ? 'success' : result.overallLevel === 'specialist' ? 'warning' : 'info'}
         title={`ملخص النتيجة — المستوى العام: ${result.overallLevel}`}

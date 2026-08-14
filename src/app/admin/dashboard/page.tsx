@@ -1,15 +1,77 @@
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/auth';
-import { AppShell } from '@/components/layout/app-shell';
-import { AdminDashboard } from '@/components/admin/admin-dashboard';
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
 
+اسم الملف:
+src/app/admin/dashboard/page.tsx
+
+وظيفة الملف:
+لوحة إدارة المشرفين (المسار /admin/dashboard) — صفحة
+صغيرة مهمتها فحص الصلاحيات فقط، ثم عرض مكون AdminDashboard
+الذي يعرض الإحصائيات وإدارة المستخدمين.
+
+لماذا نحتاجه؟
+يحمي المنطقة الإدارية: أي زائر يمر هنا يُفحص دوره،
+ولا يدخل اللوحة إلا مشرف (admin) بعد تسجيل الدخول.
+
+نوعها: Server Component (بدون 'use client').
+تعمل في الخادم، وهذا أفضل لأمان الحماية (لا يُرسل كود
+الفحص للمتصفح أصلاً).
+
+متى يعمل؟
+عند فتح /admin/dashboard من متصفح المشرف.
+
+من يستدعي هذا الملف؟
+Next.js يعرضه تلقائيًا، ويصل إليه المشرف من رابط
+"لوحة الإدارة" في القائمة الجانبية.
+
+الملفات التي يتعامل معها:
+- getCurrentUser من lib/auth (المستخدم الحالي).
+- AppShell من components/layout/app-shell (الإطار العام).
+- AdminDashboard من components/admin/admin-dashboard (المحتوى الفعلي).
+
+ترتيب العمل:
+1. جلب المستخدم الحالي.
+2. غير مسجل → انتقال لصفحة الدخول.
+3. دوره ليس admin → انتقال للوحة التحكم العادية.
+4. عرض AdminDashboard داخل الإطار العام.
+==================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+import { redirect } from 'next/navigation'; // redirect: دالة تنقل المستخدم لصفحة أخرى — من مكتبة next/navigation.
+import { getCurrentUser } from '@/lib/auth'; // دالة محلية تعيد المستخدم المسجل حاليًا أو null.
+import { AppShell } from '@/components/layout/app-shell'; // الإطار العام (القائمة الجانبية + الهيكل) — ملف محلي.
+import { AdminDashboard } from '@/components/admin/admin-dashboard'; // مكون محلي: محتوى لوحة الإدارة الفعلي (إحصاءات وإدارة).
+
+// ========================================
+// 2. بيانات التعريف
+// ========================================
+
+// metadata: عنوان الصفحة في تبويب المتصفح.
 export const metadata = { title: 'لوحة الإدارة' };
 
+// ========================================
+// 3. الصفحة الرئيسية (تعمل في الخادم)
+// ========================================
+
+// AdminDashboardPage: الدالة الرئيسية للصفحة (تعمل في الخادم).
+// async تعني: قد تنتظر قراءة بيانات قبل العرض.
 export default async function AdminDashboardPage() {
+  // الخطوة 1: من هو المستخدم؟
   const user = await getCurrentUser();
+  // لو لا يوجد مستخدم (زائر) → إلى صفحة الدخول. الـ redirect يوقف التنفيذ هنا.
   if (!user) redirect('/login');
+  // الخطوة 2: لو المستخدم ليس مشرفًا → إلى لوحته العادية.
+  // يمنع مثلاً السباح من فتح /admin/dashboard يدويًا.
   if (user.role !== 'admin') redirect('/dashboard');
 
+  // الخطوة 3: بعد اجتياز الفحصين نعرض اللوحة الإدارية داخل الإطار العام.
+  // (جميع بيانات العرض والإحصائيات داخل AdminDashboard نفسه).
   return (
     <AppShell user={user}>
       <AdminDashboard />

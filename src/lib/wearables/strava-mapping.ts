@@ -1,8 +1,62 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/strava-mapping.ts
+
+وظيفة الملف:
+"قاموس الترجمة" الخاص بـ Strava — يحوّل نشاط Strava الخام
+(تصنيف الرياضة + الوقت + المسافة + تفاصيل السباحة الاختيارية)
+إلى الصيغة الموحّدة للموقع.
+
+لماذا نحتاجه؟
+Strava تجمع تدريبات من معظم الساعات (سباحة/جري/دراجة) وترسل
+بياناتها بصيغة خاصة. نحن نترجمها هنا مرة واحدة. ملاحظة مهمة:
+المسافات في Strava تأتي دائمًا بالأمتار (لا حاجة للتحويل).
+
+لماذا "نقي" (بدون تبعيات)؟
+دوال خالصة: كائن يدخل وكائن يخرج — سهلة الاختبار
+(ملف .test.ts مرافق).
+
+متى يعمل؟
+عند مزامنة Strava (في strava.ts) لكل نشاط.
+
+من يستدعيه؟
+- src/lib/wearables/strava.ts (جالب Strava).
+- src/lib/wearables/strava-mapping.test.ts (الاختبارات).
+
+الملفات التي يتعامل معها:
+- لا يستورد من أي ملف — دوال خالصة.
+
+ترتيب العمل:
+نشاط Strava ← classifyStravaSport + mapStravaActivity ←
+صيغة موحّدة تفهمها normalize.ts
+=================================================
+*/
+
+// ========================================
+// 1. تصنيف الرياضة وتحويل النشاط
+// ========================================
+
 /**
  * تحويلات Strava النقية (بدون أي تبعيات) — قابلة للاختبار وحدة.
  * المسافات في Strava API تأتي دائمًا بالأمتار.
  */
 
+/*
+-----------------------------------------
+الدالة: classifyStravaSport
+-----------------------------------------
+وظيفتها: تصنيف نشاط Strava إلى صيغتنا الموحّدة.
+Input: type (نوع النشاط) + name (اسمه).
+Processing: نفحص النوع ثم الاسم (كلاهما بأحرف صغيرة) بحثًا عن
+            كلمات مفتاحية (swim/run/ride/weighttraining...).
+Output: swim / run / cycle / walk / gym / other.
+يستدعيها: mapStravaActivity.
+-----------------------------------------
+*/
 export function classifyStravaSport(type: string, name: string): string {
   const t = type.toLowerCase();
   const n = name.toLowerCase();
@@ -27,12 +81,29 @@ export function classifyStravaSport(type: string, name: string): string {
   return 'other';
 }
 
+// StravaActivityDetail: تفاصيل السباحة الاختيارية التي نجلبها من
+// استجابة النشاط الواحد (لفات / متوسط SWOLF / طول المسبح).
 export interface StravaActivityDetail {
   laps?: number;
   average_swolf?: number;
   pool_length?: number;
 }
 
+/*
+-----------------------------------------
+الدالة: mapStravaActivity
+-----------------------------------------
+وظيفتها: تحويل نشاط Strava إلى صيغة التدريب الموحّدة.
+Input: a (النشاط الخام) + detail (تفاصيل السباحة الاختيارية).
+Processing: نصنّف الرياضة، نأخذ وقت البدء المحلي، نحسب المدة
+            من moving_time (أو elapsed_time إن لم يتوفر) بالثواني
+            ثم نحولها لدقائق، ونقرأ المسافة (متر بالفعل) والسعرات
+            والنبض وتفاصيل السباحة.
+Output: كائن بالصيغة الموحّدة.
+يستدعيها: strava.ts (في getWorkouts و sync).
+ماذا تستدعي: classifyStravaSport.
+-----------------------------------------
+*/
 export function mapStravaActivity(
   a: Record<string, unknown>,
   detail?: StravaActivityDetail | null

@@ -1,12 +1,67 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/services/pdf/supplement-pdf.ts
+
+وظيفة الملف:
+"توليد PDF عربي لتقرير تقييم المكملات الذكي" — يعرض نتائج
+تقييم المكملات (الملخص، تغطية الاحتياجات، فجوة البروتين، الترطيب،
+التوصيات، الأهلية، الجدول، والبدائل الغذائية) بشكل منسق جاهز للطباعة.
+
+لماذا نحتاجه؟
+حتى يحصل السباح أو الأدمن على نسخة ورقية واضحة من نتيجة
+تقييم المكملات لمراجعتها ومشاركتها مع المختص.
+
+متى يعمل؟
+عند طلب تصدير/طباعة تقرير تقييم المكملات.
+
+من يستدعي هذا الملف؟
+واجهة API لتصدير تقرير المكملات PDF.
+
+الملفات التي يتعامل معها:
+- ./plan-pdf → getPdfPrinter و applyRtlNode و getLogoDataUri (أدوات مشتركة).
+- @/services/supplements/types → SupplementAssessmentOutput (نتيجة التقييم).
+- @/lib/constants → SUPPLEMENT_DISCLAIMER (نص إخلاء المسؤولية).
+- pdfmake (مكتبة خارجية).
+
+ترتيب العمل:
+تأتي بيانات السباح + نتيجة التقييم (SupplementPdfData) ↓
+تحويل صفوف التغطية والتوصيات والجدول إلى خلايا PDF ↓
+بناء مستند منسق (ترويسة، ملخص، جداول، تحذيرات، إخلاء مسؤولية) ↓
+تطبيق RTL على كل النصوص ↓
+تجميع التدفق في Buffer
+
+ملاحظة مهمة:
+تقرير استرشادي غير علاجي — لا يصف ولا يشخّص ولا يعطي جرعات
+معتمدة، وهذا مذكور صراحةً داخل المستند.
+==================================================
+*/
+
 /**
  * توليد PDF عربي لتقرير تقييم المكملات الذكي.
  * تقرير استرشادي غير علاجي — لا يصف ولا يشخص.
  */
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// أدوات مشتركة من plan-pdf (ملف محلي): الطابعة، عكس النصوص، الشعار.
 import { getPdfPrinter, applyRtlNode, getLogoDataUri } from './plan-pdf';
+// PdfPrinter: نوع من مكتبة pdfmake (استيراد نوع فقط).
 import type PdfPrinter from 'pdfmake';
+// نوع نتيجة تقييم المكملات من خدمات المكملات (ملف محلي).
 import type { SupplementAssessmentOutput } from '@/services/supplements/types';
+// نص إخلاء المسؤولية الموحد من الثوابت العامة.
 import { SUPPLEMENT_DISCLAIMER } from '@/lib/constants';
 
+// ========================================
+// 2. الثوابت وأدوات التنسيق
+// ========================================
+
+// ألوان هوية الأكاديمية (مطابقة لباقي ملفات PDF).
 const color = {
   ocean: '#0e3552',
   oceanLight: '#155480',
@@ -15,6 +70,7 @@ const color = {
   line: '#cbd5e1',
 };
 
+// كل البيانات المطلوبة لبناء التقرير: بيانات السباح + نتيجة التقييم.
 export interface SupplementPdfData {
   athleteName: string;
   gender: string;
@@ -25,6 +81,7 @@ export interface SupplementPdfData {
   assessment: SupplementAssessmentOutput;
 }
 
+// تنسيق خلية جدول (نص، حجم 9، لون ومحاذاة اختياريان).
 function cell(text: string | number, opts: { bold?: boolean; color?: string; align?: 'right' | 'left' | 'center' } = {}) {
   return {
     text: String(text),
@@ -35,18 +92,22 @@ function cell(text: string | number, opts: { bold?: boolean; color?: string; ali
   } as object;
 }
 
+// خلية ترويسة: عريضة بلون الأكاديمية وخلفية فاتحة.
 function headerCell(text: string) {
   return { ...cell(text, { bold: true, color: color.oceanLight }), fillColor: '#eef2f6' } as object;
 }
 
+// عنوان قسم داخل التقرير.
 function sectionHeader(text: string) {
   return { text, fontSize: 13, bold: true, color: color.ocean, margin: [0, 0, 0, 8] } as object;
 }
 
+// سطر نقطة (bullet) للتعداد.
 function bullet(text: string) {
   return { text: `• ${text}`, fontSize: 9, color: '#1e293b', margin: [0, 0, 0, 3] } as object;
 }
 
+// تحويل حالة المكمل من رمز إنجليزي إلى كلمة عربية.
 const statusAr: Record<string, string> = {
   'food-first': 'غذاء أولًا',
   'needs-review': 'تحت المراجعة',
@@ -55,16 +116,38 @@ const statusAr: Record<string, string> = {
   rejected: 'مرفوض',
 };
 
+// لون كل حالة (أخضر للآمن، برتقالي للتنبيه، أحمر للمحجوب).
 const statusColor: Record<string, string> = {
   'food-first': '#15803d',
   'needs-review': '#b45309',
   blocked: '#b91c1c',
 };
 
+// ========================================
+// 3. الدالة الرئيسية: توليد تقرير المكملات PDF
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: generateSupplementPdfReport
+-----------------------------------------
+وظيفتها: بناء مستند PDF كامل لتقرير تقييم المكملات.
+Input: SupplementPdfData (بيانات السباح + نتيجة التقييم).
+Processing:
+  1. تحويل صفوف التغطية والتوصيات والجدول إلى خلايا.
+  2. بناء المستند: ترويسة، ملخص وتحذيرات، جداول، فحص الأهلية، بدائل.
+  3. تطبيق RTL على كل المحتوى والتذييل.
+  4. تجميع التدفق في Buffer.
+Output: Buffer (ملف PDF).
+من يستدعيها؟ واجهة تصدير تقرير المكملات.
+ماذا تستدعي هي؟ getPdfPrinter و applyRtlNode و getLogoDataUri.
+-----------------------------------------
+*/
 export async function generateSupplementPdfReport(data: SupplementPdfData): Promise<Buffer> {
   const printer = getPdfPrinter();
   const a = data.assessment;
 
+  // صفوف جدول التغطية: (العجز، نسبة التغطية، المجموع، من الطعام، الاحتياج، المغذي).
   const coverageRows = a.coverage.map((r) => [
     cell(r.deficit > 0 ? `${Math.round(r.deficit)} ${r.unit}` : '—'),
     cell(`${Math.round(r.coverageTotalPct)}%`),
@@ -74,6 +157,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
     cell(r.nameAr, { bold: true }),
   ]);
 
+  // صفوف جدول التوصيات: (ملاحظة، التوقيت، الجرعة، الأدلة، الحالة، المكمل).
   const recommendationRows = a.recommendations.map((r) => [
     cell(r.medicalNote ?? '—'),
     cell(r.timingAr ?? '—'),
@@ -83,6 +167,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
     cell(r.nameAr, { bold: true }),
   ]);
 
+  // صفوف جدول الجدول المقترح: (السبب، مع الطعام، الجرعة، العنصر، الوقت).
   const scheduleRows = a.schedule.map((s) => [
     cell(s.reason),
     cell(s.withFood ? 'نعم' : 'لا'),
@@ -91,6 +176,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
     cell(s.time, { bold: true }),
   ]);
 
+  // مستند pdfmake: معلومات، صفحة A4، محتوى منسق.
   const doc = {
     info: {
       title: `تقرير تقييم المكملات — ${data.athleteName}`,
@@ -100,6 +186,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
     pageSize: 'A4',
     pageMargins: [36, 90, 36, 50] as [number, number, number, number],
     content: [
+      // الترويسة: تاريخ الإصدار + اسم الأكاديمية + الشعار.
       {
         columns: [
           {
@@ -123,6 +210,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
       },
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1.5, lineColor: color.gold }], margin: [0, 8, 0, 16] } as object,
 
+      // العنوان وبيانات السباح.
       { text: 'تقرير تقييم المكملات الذكي', fontSize: 16, bold: true, color: color.ocean, alignment: 'center', margin: [0, 0, 0, 4] },
       { text: `السباح: ${data.athleteName}`, fontSize: 11, bold: true, alignment: 'center', margin: [0, 0, 0, 2] },
       {
@@ -133,7 +221,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
         margin: [0, 0, 0, 14],
       },
 
-      // الملخص
+      // الملخص: نص الملخص + تحذيرات خاصة (إشراف مختص، ولي أمر، تحليل مخبري).
       {
         stack: [
           sectionHeader('الملخص'),
@@ -145,7 +233,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
         margin: [0, 0, 0, 12],
       },
 
-      // التغطية
+      // التغطية: جدول تغطية الاحتياجات من الطعام + شرح النطاقات.
       {
         stack: [
           sectionHeader('تغطية الاحتياجات من الطعام'),
@@ -165,7 +253,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
         margin: [0, 0, 0, 12],
       },
 
-      // البروتين
+      // البروتين: يظهر فقط عند وجود فجوة بروتينية محسوبة.
       ...(a.proteinGap
         ? [
             {
@@ -187,6 +275,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
                     ],
                   },
                 },
+                // خيارات تغطية العجز من الطعام الطبيعي أولًا.
                 ...(a.proteinGap.foodOptions.length > 0
                   ? [
                       { text: 'خيارات لتغطية العجز غذائيًا أولًا:', fontSize: 9.5, bold: true, color: color.ocean, margin: [0, 8, 0, 4] },
@@ -200,7 +289,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
           ]
         : []),
 
-      // الترطيب
+      // الترطيب: يظهر فقط عند توفر بيانات الترطيب المحسوبة.
       ...(a.hydration
         ? [
             {
@@ -222,6 +311,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
                     ],
                   },
                 },
+                // تحذيرات الترطيب (مثل فقدان وزن مرتفع أو إفراط في الماء).
                 ...a.hydration.warnings.map((w) => bullet(w)),
               ],
               margin: [0, 0, 0, 12],
@@ -229,7 +319,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
           ]
         : []),
 
-      // التوصيات
+      // التوصيات: جدول المكملات المفحوصة مع تحذير الجرعات التقديرية.
       {
         stack: [
           sectionHeader('توصيات المكملات المفحوصة'),
@@ -249,7 +339,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
         margin: [0, 0, 0, 12],
       },
 
-      // الأهلية
+      // الأهلية: قائمة بنتائج فحص السلامة لكل مكمل.
       {
         stack: [
           sectionHeader('فحص الأهلية والسلامة'),
@@ -258,7 +348,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
         margin: [0, 0, 0, 12],
       },
 
-      // الجدول
+      // الجدول المقترح: يظهر عند وجود صفوف.
       ...(a.schedule.length > 0
         ? [
             {
@@ -275,6 +365,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
                     ],
                   },
                 },
+                // تحذير إن وُجد عنصر مقرر يوم البطولة.
                 ...(a.schedule.some((s) => s.onCompetitionDay)
                   ? [{ text: 'تحذير: لا تُجرَّب مكملات جديدة يوم البطولة.', fontSize: 8.5, bold: true, color: '#b91c1c', margin: [0, 6, 0, 0] }]
                   : []),
@@ -284,7 +375,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
           ]
         : []),
 
-      // بدائل غذائية
+      // بدائل غذائية: لكل عنصر ناقص بدائله الغذائية.
       ...(a.foodAlternatives.length > 0
         ? [
             {
@@ -300,7 +391,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
           ]
         : []),
 
-      // إخلاء المسؤولية
+      // إخلاء المسؤولية: النص الموحد من الثوابت.
       {
         stack: [
           { text: 'تنبيه وإخلاء مسؤولية', fontSize: 10, bold: true, color: color.ocean, margin: [0, 0, 0, 4] },
@@ -309,6 +400,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
         margin: [0, 8, 0, 10],
       },
 
+      // التوقيع.
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.8, lineColor: color.line }], margin: [0, 4, 0, 12] } as object,
       {
         columns: [
@@ -326,6 +418,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
   } as object;
 
   // تطبيق اتجاه RTL على كل نصوص المستند
+  // نمرر على المحتوى ونلف التذييل ليعكس نصوصه أيضًا.
   const rtlDoc = doc as Record<string, unknown>;
   (rtlDoc.content as unknown[]).forEach((item) => applyRtlNode(item));
   if (rtlDoc.footer) {
@@ -337,6 +430,7 @@ export async function generateSupplementPdfReport(data: SupplementPdfData): Prom
     };
   }
 
+  // تشغيل الطابعة وتجميع أجزاء الملف في Buffer.
   return new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
     const stream = printer.createPdfKitDocument(rtlDoc as unknown as Parameters<PdfPrinter['createPdfKitDocument']>[0]);

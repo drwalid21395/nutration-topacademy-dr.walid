@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../config.dart';
 
@@ -98,7 +97,7 @@ Future<bool> pingServer(String baseUrl) async {
   try {
     final res = await http
         .get(Uri.parse(baseUrl), headers: {'Accept': 'application/json'})
-        .timeout(_timeout);
+        .timeout(ApiClient._timeout);
     return res.statusCode < 500;
   } catch (_) {
     return false;

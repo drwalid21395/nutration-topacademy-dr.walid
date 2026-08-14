@@ -1,8 +1,63 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/oura-mapping.ts
+
+وظيفة الملف:
+"قاموس الترجمة" الخاص بـ Oura — يستقبل البيانات الخام من
+Oura Cloud API v2 ويعيدها بالصيغة الموحّدة للموقع:
+تصنيف الرياضة، تحويل الثواني إلى دقائق، وتحويل سجلات
+النشاط والنوم والتدريب.
+
+لماذا نحتاجه؟
+Oura تسمّي الحقول بصيغتها الخاصة (distance_meters,
+calories_active, total_sleep_duration...). نحن لا نريد
+تلمّس هذه الأسماء في باقي المشروع — كل الترجمة هنا.
+
+لماذا "نقي" (بدون تبعيات)؟
+الدوال خالصة: كائن يدخل وكائن يخرج دون لمس قاعدة البيانات.
+هذا يجعلها سهلة الاختبار (ملف .test.ts مرافق).
+
+متى يعمل؟
+عند مزامنة Oura (في oura.ts) لكل يوم ولكل تمرين.
+
+من يستدعيه؟
+- src/lib/wearables/oura.ts (جالب Oura).
+- src/lib/wearables/oura-mapping.test.ts (الاختبارات).
+
+الملفات التي يتعامل معها:
+- لا يستورد من أي ملف — دوال خالصة.
+  يبني صورته من واجهة Oura Cloud API v2.
+
+ترتيب العمل:
+استجابة Oura ← دوال map* ← صيغة موحّدة تفهمها normalize.ts
+=================================================
+*/
+
+// ========================================
+// 1. تصنيف الرياضة وتحويل الوحدات
+// ========================================
+
 /**
  * تحويلات Oura النقية (بدون تبعيات) — قابلة للاختبار وحدة.
  * Oura Cloud API v2: https://cloud.ouraring.com/docs
  */
 
+/*
+-----------------------------------------
+الدالة: mapOuraSport
+-----------------------------------------
+وظيفتها: تصنيف نشاط Oura من اسم التمرين إلى صيغتنا الموحّدة.
+Input: activity (اسم النشاط كنص).
+Processing: نفحص الاسم بعد تحويله لأحرف كبيرة ونبحث عن كلمات
+            (SWIM, RUN, CYCL...).
+Output: swim / run / cycle / walk / gym / other.
+يستدعيها: mapOuraWorkout.
+-----------------------------------------
+*/
 /** تصنيف نشاط Oura من اسم نشاط التمرين → صيغتنا الموحّدة. */
 export function mapOuraSport(activity: string): string {
   const a = (activity ?? '').toUpperCase();
@@ -26,6 +81,17 @@ export function mapOuraSport(activity: string): string {
   return 'other';
 }
 
+/*
+-----------------------------------------
+الدالة: ouraSecondsToMinutes
+-----------------------------------------
+وظيفتها: تحويل الثواني إلى دقائق (Oura ترسل المدد بالثواني).
+Input: seconds (قد تكون null/undefined).
+Processing: نتجاهل القيم السالبة وغير الرقمية ونقرّب لأقرب دقيقة.
+Output: الدقائق، أو undefined.
+يستدعيها: mapOuraDailySleep و mapOuraWorkout.
+-----------------------------------------
+*/
 /** ثوانٍ → دقائق. */
 export function ouraSecondsToMinutes(seconds: number | null | undefined): number | undefined {
   if (seconds == null) return undefined;
@@ -34,6 +100,23 @@ export function ouraSecondsToMinutes(seconds: number | null | undefined): number
   return Math.round(n / 60);
 }
 
+// ========================================
+// 2. تحويل استجابات Oura إلى الصيغة الموحّدة
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: mapOuraDailyActivity
+-----------------------------------------
+وظيفتها: تحويل سجل نشاط يومي من Oura إلى الصيغة الموحّدة.
+Input: raw (عنصر من /usercollection/daily_activity).
+Processing: نقرأ الخطوات والمسافة (بالمتر) والسعرات (نشطة/راحة/
+            كلية) ومتوسط النبض. سعرات التدريب نحسبها كالفرق بين
+            الكلية والنشطة والراحة (بلا مضاعفة).
+Output: كائن بالصيغة الموحّدة.
+يستدعيها: oura.ts (لكل يوم).
+-----------------------------------------
+*/
 /** تحويل سجل نشاط يومي Oura → صيغة النشاط الموحّدة. */
 export function mapOuraDailyActivity(raw: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -47,6 +130,20 @@ export function mapOuraDailyActivity(raw: Record<string, unknown>): Record<strin
   };
 }
 
+/*
+-----------------------------------------
+الدالة: mapOuraDailySleep
+-----------------------------------------
+وظيفتها: استخراج النوم ومعدلات النبض من سجل نوم Oura.
+Input: raw (عنصر من /usercollection/daily_sleep).
+Processing: نحول مدة النوم من ثوانٍ إلى دقائق، ونقرأ متوسط
+            النبض ونبض الراحة.
+Output: كائن قد يحتوي sleepMinutes و/أو avgHeartRate
+        و/أو restingHeartRate.
+يستدعيها: oura.ts (لكل يوم).
+ماذا تستدعي: ouraSecondsToMinutes.
+-----------------------------------------
+*/
 /** استخراج النوم ومعدل نبض الراحة من سجل نوم Oura. */
 export function mapOuraDailySleep(raw: Record<string, unknown>): { sleepMinutes?: number; avgHeartRate?: number; restingHeartRate?: number } {
   const out: { sleepMinutes?: number; avgHeartRate?: number; restingHeartRate?: number } = {};
@@ -61,6 +158,19 @@ export function mapOuraDailySleep(raw: Record<string, unknown>): { sleepMinutes?
   return out;
 }
 
+/*
+-----------------------------------------
+الدالة: mapOuraWorkout
+-----------------------------------------
+وظيفتها: تحويل تمرين Oura إلى صيغة التدريب الموحّدة.
+Input: raw (عنصر من /usercollection/workout).
+Processing: نصنّف الرياضة ونحول المدة (ثوانٍ → دقائق) ونقرأ
+            السعرات والمسافة والنبض، ونبني externalId بصيغة oura-<id>.
+Output: كائن بالصيغة الموحّدة.
+يستدعيها: oura.ts (في getWorkouts).
+ماذا تستدعي: mapOuraSport + ouraSecondsToMinutes.
+-----------------------------------------
+*/
 /** تحويل تمرين Oura → صيغة التدريب الموحّدة. */
 export function mapOuraWorkout(raw: Record<string, unknown>): Record<string, unknown> {
   const startTime = String(raw.start_datetime ?? '');

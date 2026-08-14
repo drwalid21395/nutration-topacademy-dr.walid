@@ -1,20 +1,53 @@
+/*
+=================================================
+ملف اختبار (مختصر)
+=================================================
+
+الهدف:
+التحقق من صحة وحدات حاسبة المكملات: التغطية (coverage)، الأهلية
+(eligibility)، البروتين، الترطيب، الجدول، ثم التقييم الشامل كتكامل.
+
+الأداة:
+Vitest (describe/it/expect).
+
+ملاحظة:
+ملف اختبارات فقط — لا يُنشر ولا يُستدعى من التطبيق.
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// vitest: مكتبة الاختبارات (describe/it/expect).
 import { describe, it, expect } from 'vitest';
+// الوحدات قيد الاختبار: حساب التغطية والحدود.
 import {
   calculateNutrientCoverage,
   checkUpperLimit,
   classifyCoverage,
   buildNutrientRow,
 } from './coverage';
+// محرك الأهلية وفحص التكرار.
 import {
   runEligibility,
   checkDuplicateIngredients,
   type EligibilityProfile,
 } from './eligibility';
+// حساب فجوة البروتين.
 import { calculateProteinSupplementGap } from './protein';
+// حساب الترطيب والإلكتروليتات.
 import { calculateHydrationAndElectrolytes } from './hydration';
+// توليد الجدول اليومي.
 import { generateSupplementSchedule } from './schedule';
+// التقييم الشامل.
 import { generateSupplementAssessment } from './assessment';
+// الأنواع المشتركة المستخدمة في بناء بيانات الاختبار.
 import type { EligibilityContext, SupplementAssessmentInput } from './types';
+
+// ========================================
+// 2. بيانات اختبار مشتركة
+// ========================================
 
 const baseProfile: EligibilityProfile = {
   key: 'creatine',
@@ -52,6 +85,10 @@ function ctx(overrides: Partial<EligibilityContext> = {}): EligibilityContext {
   };
 }
 
+// ========================================
+// 3. اختبارات التغطية (coverage)
+// ========================================
+
 describe('coverage', () => {
   it('يحسب النسب والعجز والفائض', () => {
     const r = calculateNutrientCoverage(200, 150);
@@ -83,6 +120,10 @@ describe('coverage', () => {
     expect(row.limitStatus).toBe('exceeded');
   });
 });
+
+// ========================================
+// 4. اختبارات الأهلية (eligibility)
+// ========================================
 
 describe('eligibility', () => {
   it('يمنع القاصرين غير المدعومين', () => {
@@ -144,6 +185,10 @@ describe('eligibility', () => {
   });
 });
 
+// ========================================
+// 5. اختبارات البروتين (protein)
+// ========================================
+
 describe('protein', () => {
   it('العجز القابل للتغطية غذائيًا لا يُقترح مسحوق', () => {
     const r = calculateProteinSupplementGap({ requirementG: 140, fromFoodG: 120 });
@@ -167,6 +212,10 @@ describe('protein', () => {
     expect(r.supplementPartG).toBe(0);
   });
 });
+
+// ========================================
+// 6. اختبارات الترطيب (hydration)
+// ========================================
 
 describe('hydration', () => {
   it('يوصي بالكهرل للجلسات الطويلة', () => {
@@ -200,6 +249,10 @@ describe('hydration', () => {
   });
 });
 
+// ========================================
+// 7. اختبارات الجدول (schedule)
+// ========================================
+
 describe('schedule', () => {
   it('يرتب حسب التوقيت ويمنع تكرار المكون', () => {
     const rows = generateSupplementSchedule({
@@ -226,6 +279,10 @@ describe('schedule', () => {
     expect(rows[0].item).toContain('لا توجد مكملات');
   });
 });
+
+// ========================================
+// 8. اختبارات التقييم الشامل (تكامل)
+// ========================================
 
 describe('assessment (تكامل)', () => {
   const baseInput: SupplementAssessmentInput = {

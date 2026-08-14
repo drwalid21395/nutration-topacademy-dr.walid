@@ -1,22 +1,89 @@
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { AppShell } from '@/components/layout/app-shell';
-import { SwimmerProfileForm } from '@/components/profile/swimmer-profile-form';
-import { Card } from '@/components/ui';
-import type { SwimmerFormData } from '@/types';
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
 
+اسم الملف:
+src/app/swimmer-profile/page.tsx
+
+وظيفة الملف:
+صفحة "ملف السباح" (المسار /swimmer-profile) — تجلب ملف
+السباح الحالي من قاعدة البيانات، تحوّله إلى بنية نموذج
+(SwimmerFormData)، ثم تعرض نموذج SwimmerProfileForm
+لتعبئة البيانات أو تعديلها.
+
+لماذا نحتاجه؟
+ملف السباح هو قلب النظام: كل الحسابات والخطط مبنية على
+بياناته (الطول، الوزن، التدريب، الحالة الصحية...).
+
+نوعها: Server Component (بدون 'use client').
+نقرأ الملف الحالي من قاعدة البيانات في الخادم قبل إرسال
+الصفحة، ثم نسلمه للنموذج (الذي يعمل في المتصفح).
+
+متى يعمل؟
+عند فتح /swimmer-profile بعد تسجيل الدخول.
+
+من يستدعي هذا الملف؟
+Next.js يعرضه تلقائيًا؛ يصل إليه المستخدم من زر "تعديل
+البيانات" في لوحة التحكم أو رسائل البيانات الناقصة.
+
+الملفات التي يتعامل معها:
+- getCurrentUser من lib/auth و prisma من lib/prisma.
+- AppShell + مكونات UI (Card).
+- SwimmerProfileForm من components/profile/swimmer-profile-form.
+- SwimmerFormData من types.
+
+ترتيب العمل:
+1. فحص تسجيل الدخول.
+2. جلب آخر ملف سباح من قاعدة البيانات.
+3. تحويل قيم قاعدة البيانات إلى بنية النموذج (وتاريخ الميلاد كنص).
+4. فك بيانات ولي الأمر (JSON) لو وُجدت.
+5. عرض النموذج مع القيم الأولية.
+==================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+import { redirect } from 'next/navigation'; // redirect: نقل لصفحة أخرى — من مكتبة next/navigation.
+import { getCurrentUser } from '@/lib/auth'; // دالة محلية: المستخدم المسجل حاليًا.
+import { prisma } from '@/lib/prisma'; // عميل قاعدة البيانات — ملف محلي.
+import { AppShell } from '@/components/layout/app-shell'; // الإطار العام — ملف محلي.
+import { SwimmerProfileForm } from '@/components/profile/swimmer-profile-form'; // نموذج إدخال/تعديل ملف السباح — ملف محلي.
+import { Card } from '@/components/ui'; // مكونات واجهة جاهزة — ملف محلي.
+
+// ملاحظة:
+// يبدو أن المكوّن Card مستورد هنا لكنه غير مستخدم حاليًا في هذا الملف.
+// يجب التأكد قبل حذفه.
+import type { SwimmerFormData } from '@/types'; // النوع الذي يعرّف بنية النموذج — ملف محلي.
+
+// ========================================
+// 2. بيانات التعريف
+// ========================================
+
+// metadata: عنوان الصفحة في تبويب المتصفح.
 export const metadata = { title: 'ملف السباح' };
 
+// ========================================
+// 3. الصفحة الرئيسية (تعمل في الخادم)
+// ========================================
+
+// SwimmerProfilePage: الدالة الرئيسية للصفحة (تعمل في الخادم).
 export default async function SwimmerProfilePage() {
+  // الخطوة 1: من هو المستخدم؟ لو زائر → صفحة الدخول.
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
+  // الخطوة 2: نجلب آخر ملف سباح للمستخدم (قد يكون null لو جديد).
   const profile = await prisma.swimmerProfile.findFirst({
     where: { userId: user.id },
     orderBy: { updatedAt: 'desc' },
   });
 
+  // الخطوة 3: تحويل بيانات قاعدة البيانات إلى بنية النموذج.
+  // الحقول الاختيارية الفارغة نحولها إلى undefined (النموذج يتعامل معها كفارغة).
+  // toISOString().slice(0,10): تحويل التاريخ إلى "YYYY-MM-DD" نصًا (حقل date في HTML).
   const initial: SwimmerFormData | null = profile
     ? {
         fullName: profile.fullName,
@@ -60,6 +127,9 @@ export default async function SwimmerProfilePage() {
         digestiveIssues: profile.digestiveIssues ?? undefined,
         pregnancyStatus: profile.pregnancyStatus ?? undefined,
         isMinor: profile.isMinor,
+        // بيانات ولي الأمر محفوظة كنص JSON داخل حقل واحد —
+        // نفكها ونأخذ الاسم. JSON.parse قد يفشل لو النص تالف، لكن
+        // البيانات تُكتب بحكم النظام فالمسار آمن عمليًا.
         guardianName: profile.guardianData
           ? (JSON.parse(profile.guardianData) as { name?: string }).name
           : undefined,
@@ -70,6 +140,9 @@ export default async function SwimmerProfilePage() {
       }
     : null;
 
+  // ========================================
+  // 4. عرض الواجهة (JSX)
+  // ========================================
   return (
     <AppShell user={user}>
       <div className="mb-6">
@@ -78,6 +151,8 @@ export default async function SwimmerProfilePage() {
           أدخل بيانات السباح الأساسية والتدريبية والغذائية — تُستخدم لاحقًا في حساب الاحتياجات وإنشاء الخطط.
         </p>
       </div>
+      {/* النموذج: initial تحمل القيم المحفوظة (أو null لو جديد)،
+          ونتفاعل معه بصورة وصورة المستخدم واسمه. */}
       <SwimmerProfileForm initial={initial} userImage={user.image ?? null} userName={user.name ?? null} />
     </AppShell>
   );

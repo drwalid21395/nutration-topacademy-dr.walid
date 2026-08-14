@@ -1,6 +1,52 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/ui/index.tsx
+
+وظيفة الملف:
+مكتبة المكوّنات الجاهزة (Building Blocks) الخاصة بالتصميم —
+تجمّع هنا كل الوحدات الأساسية المتكررة في التطبيق:
+- Card (بطاقة)، CardHeader (ترويسة البطاقة)
+- Alert (تنبيه ملون)، Badge (شارة/وسم صغير)
+- Stat (إحصائية برقم)، ProgressBar (شريط تقدم)، ProgressRing (دائرة تقدم)
+- Modal (نافذة منبثقة)، Spinner (مؤشر تحميل)، EmptyState (حالة فارغة)
+
+لماذا نحتاجه؟
+بدل تكرار نفس الكود (بكسلات، ألوان، تجاوب) في كل صفحة،
+نعرّف هذه الوحدات مرة واحدة ثم نستخدمها في كل مكان —
+فيتوحّد التصميم ويصبح التعديل من نقطة واحدة.
+
+'use client'؟
+لا نحتاجه — كلها مكوّنات عرض خالصة (بدون hooks/useState).
+
+متى يعمل؟
+كل المكوّنات في الملف تظهر عند تضمينها في أي صفحة.
+
+من يستدعي هذا الملف؟
+تقريبًا كل صفحات ومكوّنات التطبيق:
+import { Card, Alert, Badge, ... } from '@/components/ui';
+
+الملفات التي يتعامل معها:
+- lib/utils (دالة cn لدمج الأصناف).
+- الأصناف العامة: card، card-hover، shadow-card-lg (من CSS).
+
+ترتيب العمل لكل مكوّن:
+1. نستقبل خصائص العرض (نصوص، ألوان، أطفال React) ↓
+2. نرسم الهيكل مع الأصناف المناسبة ↓
+3. نضيف الأصناف الإضافية القادمة من المتصل عبر cn
+==================================================
+*/
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Info, CheckCircle2, XCircle, X } from 'lucide-react';
+
+// ========================================
+// Card: بطاقة/صندوق محتوى أساسية
+// ========================================
 
 export function Card({
   className,
@@ -14,6 +60,10 @@ export function Card({
     </div>
   );
 }
+
+// ========================================
+// CardHeader: ترويسة بطاقة (عنوان + أيقونة + زر اختياري)
+// ========================================
 
 export function CardHeader({
   title,
@@ -29,6 +79,7 @@ export function CardHeader({
   return (
     <div className="mb-4 flex items-start justify-between gap-3">
       <div className="flex items-center gap-3">
+        {/* أيقونة داخل مربع أزرق فاتح */}
         {icon && (
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ocean-50 text-ocean-600">
             {icon}
@@ -39,13 +90,19 @@ export function CardHeader({
           {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
         </div>
       </div>
+      {/* إجراء اختياري على يسار الترويسة */}
       {action}
     </div>
   );
 }
 
+// ========================================
+// Alert: تنبيه ملون (معلومة/تحذير/خطر/نجاح)
+// ========================================
+
 type AlertVariant = 'info' | 'warning' | 'danger' | 'success';
 
+// ألوان كل نوع من التنبيهات.
 const alertStyles: Record<AlertVariant, string> = {
   info: 'bg-ocean-50 border-ocean-200 text-ocean-800',
   warning: 'bg-amber-50 border-amber-200 text-amber-800',
@@ -53,6 +110,7 @@ const alertStyles: Record<AlertVariant, string> = {
   success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
 };
 
+// الأيقونة المناسبة لكل نوع.
 const alertIcons: Record<AlertVariant, React.ReactNode> = {
   info: <Info className="h-5 w-5 shrink-0" />,
   warning: <AlertTriangle className="h-5 w-5 shrink-0" />,
@@ -82,6 +140,7 @@ export function Alert({
         {title && <p className="mb-1 font-bold">{title}</p>}
         <div className="leading-relaxed">{children}</div>
       </div>
+      {/* زر إغلاق اختياري (dismissible) */}
       {dismissible && onDismiss && (
         <button onClick={onDismiss} className="shrink-0 opacity-60 hover:opacity-100" aria-label="إغلاق">
           <X className="h-4 w-4" />
@@ -90,6 +149,10 @@ export function Alert({
     </div>
   );
 }
+
+// ========================================
+// Badge: وسم/شارة صغيرة ملونة
+// ========================================
 
 export function Badge({
   children,
@@ -100,6 +163,7 @@ export function Badge({
   color?: 'ocean' | 'gold' | 'green' | 'red' | 'slate';
   className?: string;
 }) {
+  // ألوان جاهزة حسب نوع الوسم.
   const colors = {
     ocean: 'bg-ocean-100 text-ocean-800',
     gold: 'bg-gold-300/40 text-gold-600',
@@ -114,6 +178,10 @@ export function Badge({
   );
 }
 
+// ========================================
+// Stat: بطاقة إحصائية (رقم كبير + وصف)
+// ========================================
+
 export function Stat({
   label,
   value,
@@ -127,6 +195,7 @@ export function Stat({
 }) {
   return (
     <Card hover className="flex items-center gap-4">
+      {/* أيقونة بتدرج أزرق */}
       {icon && (
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-ocean-500 to-ocean-700 text-white">
           {icon}
@@ -141,6 +210,10 @@ export function Stat({
   );
 }
 
+// ========================================
+// ProgressBar: شريط تقدم أفقي
+// ========================================
+
 export function ProgressBar({
   value,
   color = 'ocean',
@@ -152,6 +225,7 @@ export function ProgressBar({
   className?: string;
   label?: string;
 }) {
+  // نضغط القيمة بين 0 و100 حتى لا يكسر الشريط.
   const v = Math.min(100, Math.max(0, value));
   const colors = {
     ocean: 'bg-ocean-500',
@@ -169,6 +243,10 @@ export function ProgressBar({
   );
 }
 
+// ========================================
+// ProgressRing: دائرة تقدم (SVG)
+// ========================================
+
 export function ProgressRing({
   value,
   size = 120,
@@ -184,7 +262,9 @@ export function ProgressRing({
   children?: React.ReactNode;
   label?: string;
 }) {
+  // نضغط القيمة بين 0 و100.
   const v = Math.min(100, Math.max(0, value));
+  // حساب نصف القطر والمحيط لإخفاء الجزء غير المكتمل من الدائرة.
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (v / 100) * circumference;
@@ -193,6 +273,7 @@ export function ProgressRing({
     <div className="flex flex-col items-center gap-2">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
+          {/* حلقة الخلفية الرمادية */}
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -201,6 +282,7 @@ export function ProgressRing({
             stroke="#e2e8f0"
             strokeWidth={strokeWidth}
           />
+          {/* الحلقة الملونة — تظهر بقدر النسبة المئوية */}
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -214,6 +296,7 @@ export function ProgressRing({
             className="transition-all duration-700"
           />
         </svg>
+        {/* النسبة المئوية في المنتصف */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-2xl font-extrabold text-ocean-900">{Math.round(v)}%</span>
         </div>
@@ -223,6 +306,10 @@ export function ProgressRing({
     </div>
   );
 }
+
+// ========================================
+// Modal: نافذة منبثقة
+// ========================================
 
 export function Modal({
   open,
@@ -237,10 +324,13 @@ export function Modal({
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
 }) {
+  // إن كانت مغلقة لا نرسم شيئًا.
   if (!open) return null;
+  // عرض النافذة حسب الحجم المطلوب.
   const sizes = { sm: 'max-w-md', md: 'max-w-2xl', lg: 'max-w-4xl' };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      {/* خلفية معتمة — النقر عليها يغلق النافذة */}
       <div className="absolute inset-0 bg-ocean-950/60 backdrop-blur-sm" onClick={onClose} />
       <div className={cn('relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-card-lg', sizes[size])}>
         <div className="mb-4 flex items-center justify-between">
@@ -255,6 +345,10 @@ export function Modal({
   );
 }
 
+// ========================================
+// Spinner: مؤشر تحميل
+// ========================================
+
 export function Spinner({ label = 'جارٍ التحميل…' }: { label?: string }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-16 text-ocean-600">
@@ -266,6 +360,10 @@ export function Spinner({ label = 'جارٍ التحميل…' }: { label?: stri
     </div>
   );
 }
+
+// ========================================
+// EmptyState: حالة فارغة (لا توجد بيانات)
+// ========================================
 
 export function EmptyState({
   icon,

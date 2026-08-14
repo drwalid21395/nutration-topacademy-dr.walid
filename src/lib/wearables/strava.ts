@@ -1,6 +1,58 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/strava.ts
+
+وظيفة الملف:
+"المحوّل الفعلي" (Adapter) لمنصة Strava — يجلب التدريبات
+(سباحة/جري/دراجة) من Strava API v3 مع تفاصيل السباحة
+(لفات/SWOLF/طول المسبح)، ويحوّلها للصيغة الموحّدة عبر
+strava-mapping.ts، مع تجديد التوكن تلقائيًا (ينتهي بعد 6 ساعات).
+
+لماذا نحتاجه؟
+Strava مجانية وسجل ذاتي وتجمع تدريبات معظم الساعات — بوابة
+سهلة لإدخال تدريبات السباح. بدل كتابة منطقها في كل مكان،
+نضعه كله هنا. هو "مترجم من لغة Strava إلى لغة الموقع".
+
+متى يعمل؟
+- عند بدء الربط من المتصفح (connect).
+- عند المزامنة الدورية أو اليدوية (sync / getWorkouts).
+
+من يستدعيه؟
+- src/lib/wearables/adapters.ts (يرجعه كمحوّل عند طلب strava).
+- src/lib/wearables/sync.ts (للمزامنة).
+
+الملفات التي يتعامل معها:
+- ./types: الواجهة الموحّدة WearableProviderAdapter.
+- ./strava-mapping: تحويل النشاطات الخام إلى الصيغة الموحّدة.
+- src/lib/crypto.ts: تشفير/فك تشفير التوكنات.
+- src/lib/prisma.ts: قراءة/تحديث اتصال المستخدم.
+
+ترتيب العمل:
+connect (رابط الإذن) ← callback يخزن التوكن ← sync: تجديد
+التوكن لو انتهى ← جلب التدريبات (مع تفاصيل السباحة لكل نشاط) ←
+تمرير النتيجة للـ ingest
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// prisma: من ملف محلي (src/lib/prisma.ts) — الاتصال بقاعدة البيانات.
 import { prisma } from '@/lib/prisma';
+
+// من ملف محلي src/lib/crypto.ts: تشفير التوكن قبل الحفظ وفكّه قبل الاستخدام.
 import { decryptText, encryptText } from '@/lib/crypto';
+
+// من ملف محلي ./types: الواجهة الموحّدة + أشكال البيانات + الخطأ الموحّد.
 import { WearableProviderAdapter, ProviderHealthData, WearableProviderId, ProviderNotConfiguredError } from './types';
+
+// من ملف محلي ./strava-mapping: "قاموس الترجمة" — تحويل نشاطات
+// Strava الخام إلى الصيغة الموحّدة + نوع تفاصيل السباحة.
 import { mapStravaActivity, StravaActivityDetail } from './strava-mapping';
 
 /**
@@ -10,10 +62,20 @@ import { mapStravaActivity, StravaActivityDetail } from './strava-mapping';
  * - تجديد التوكن تلقائيًا (توكن الوصول ينتهي بعد ٦ ساعات).
  */
 
+// ========================================
+// 2. ثوابت الاتصال بموقع Strava
+// ========================================
+
+// عناوين Strava الرسمية (قاعدة API + صفحة الإذن/التوكن).
 const STRAVA_API = 'https://www.strava.com/api/v3';
 const STRAVA_AUTH = 'https://www.strava.com/oauth';
+
+// كم يومًا نرجع إلى الوراء عند المزامنة (آخر أسبوع).
 const DAYS_BACK = 7;
 
+// stravaGet: دالة مساعدة داخلية ترسل طلب GET إلى Strava بحامل
+// التوكن. الخطأ 401 يعني توكن غير صالح، وبقية الأخطاء تُطرح
+// كخطأ (بخلاف بقية الجالبين التي تتجاهلها).
 async function stravaGet(path: string, token: string): Promise<Record<string, unknown> | Array<Record<string, unknown>>> {
   const res = await fetch(`${STRAVA_API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
   if (res.status === 401) throw new Error('توكن Strava غير صالح — أعد الربط.');
@@ -21,9 +83,25 @@ async function stravaGet(path: string, token: string): Promise<Record<string, un
   return res.json() as Promise<Record<string, unknown> | Array<Record<string, unknown>>>;
 }
 
+// ========================================
+// 3. المحوّل StravaAdapter
+// ========================================
+
+/*
+-----------------------------------------
+الصنف: StravaAdapter
+-----------------------------------------
+وظيفته: تنفيذ واجهة WearableProviderAdapter لصالح Strava —
+        الربط، المزامنة، جلب التدريبات مع تفاصيل السباحة،
+        وتجديد التوكن.
+id: يصرّح بنفسه كمزود 'strava'.
+-----------------------------------------
+*/
 export class StravaAdapter implements WearableProviderAdapter {
   readonly id: WearableProviderId = 'strava';
 
+  // connect: يبني رابط الإذن الرسمي (OAuth) مع الصلاحيات
+  // (قراءة الملف وقراءة كل النشاطات).
   async connect(): Promise<{ url?: string; status: 'redirect' | 'configured' | 'unsupported' }> {
     const clientId = process.env.STRAVA_CLIENT_ID;
     if (!clientId) return { status: 'unsupported' };

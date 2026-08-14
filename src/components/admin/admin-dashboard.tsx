@@ -1,15 +1,77 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/admin/admin-dashboard.tsx
+
+وظيفة الملف:
+لوحة الإدارة الرئيسية للمدير — نظرة شاملة على المنصة:
+إحصائيات عامة (مستخدمون، خطط، سجلات)، التزام السباحين اليوم
+(بطاقات للجوال + جدول للحاسوب)، إدارة الأدوار (تعليق/تفعيل)،
+التوزيع بالأدوار، آخر الأحداث (Audit)، وصفحات المحتوى.
+
+لماذا نحتاجه؟
+يحتاج الأدمن مراقبة كل السباحين وإدارة حساباتهم من مكان واحد.
+
+'use client':
+يعمل في المتصفح لأنه يستخدم useState وuseEffect وfetch
+وonClick (تحديث الحالة وتغيير الأدوار).
+
+متى يعمل؟
+عند فتح /admin/dashboard (المحمية بدور admin).
+
+من يستدعي هذا الملف؟
+src/app/admin/dashboard/page.tsx (صفحة الخادم).
+
+الملفات التي يتعامل معها:
+- API: /api/admin/overview (إحصائيات + تحديث مستخدم)،
+  /api/admin/swimmers (قائمة السباحين)، /api/admin/reports (PDF/Excel).
+- AdminActivityBell (جرس النشاط الشامل).
+- UI: Button، Card، Badge، Alert، EmptyState، UserAvatar.
+- lib/utils: formatDate، formatNumber. lib/constants: ROLES.
+
+ترتيب العمل:
+1. التحميل: نطلب الإحصائيات وقائمة السباحين معًا ↓
+2. نعرض بطاقات الإحصائيات الخمس ↓
+3. جدول/بطاقات التزام السباحين (نسب لكل مغذي) ↓
+4. أزرار تقارير PDF / Excel ↓
+5. إدارة المستخدمين (تغيير دور، تعليق/تفعيل) ↓
+6. أقسام جانبية: الأدوار، الأحداث، صفحات المحتوى
+==================================================
+*/
+
 'use client';
 
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// useEffect (كود بعد العرض)، useState (حالة متغيرة) — من مكتبة react.
 import { useEffect, useState } from 'react';
+// Link من next/link: تنقل بين الصفحات (ملف سباح، لوحة إدارة).
 import Link from 'next/link';
+// أيقونات من lucide-react (مكتبة خارجية).
 import { Users, FileText, Utensils, Dumbbell, Trophy, ShieldCheck, Ban, CheckCircle2, ClipboardCheck, Eye } from 'lucide-react';
+// Button: زر جاهز من مكونات الواجهة (مجلد محلي).
 import { Button } from '@/components/ui/button';
+// مكونات واجهة جاهزة من نفس مجلد ui.
 import { Card, Badge, Alert, EmptyState } from '@/components/ui';
+// UserAvatar: صورة المستخدم (الصورة أو أول حرف من الاسم).
 import { UserAvatar } from '@/components/ui/user-avatar';
+// AdminActivityBell: جرس سجل النشاط الشامل (مكوّن محلي).
 import { AdminActivityBell } from '@/components/admin/admin-activity-bell';
+// formatDate وformatNumber: دوال تنسيق التواريخ والأرقام.
 import { formatDate, formatNumber } from '@/lib/utils';
+// ROLES: أسماء الأدوار بالعربية (admin، coach، athlete...).
 import { ROLES } from '@/lib/constants';
 
+// ========================================
+// 2. ثابت: لون شارة كل دور
+// ========================================
+
+// ROLE_BADGE: لكل دور لون شارة يميزه (أحمر للأدمن، أزرق للمدرب...).
 const ROLE_BADGE: Record<string, 'ocean' | 'gold' | 'green' | 'red' | 'slate'> = {
   admin: 'red',
   coach: 'ocean',
@@ -18,13 +80,22 @@ const ROLE_BADGE: Record<string, 'ocean' | 'gold' | 'green' | 'red' | 'slate'> =
   athlete: 'slate',
 };
 
+// ========================================
+// 3. المكوّن الرئيسي: AdminDashboard
+// ========================================
+
+// AdminDashboard: اللوحة الكاملة. لا يستقبل Props.
 export function AdminDashboard() {
+  // data: بيانات الإحصائيات القادمة من /api/admin/overview.
   const [data, setData] = useState<any>(null);
+  // swimmers: قائمة السباحين مع التزامهم اليومي.
   const [swimmers, setSwimmers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSwimmers, setLoadingSwimmers] = useState(true);
+  // message: رسالة نجاح بعد تحديث مستخدم.
   const [message, setMessage] = useState<string | null>(null);
 
+  // load: جلب الإحصائيات العامة (مستخدمون، خطط، سجلات، أحداث).
   const load = async () => {
     const res = await fetch('/api/admin/overview');
     const d = await res.json();
@@ -32,6 +103,7 @@ export function AdminDashboard() {
     setLoading(false);
   };
 
+  // loadSwimmers: جلب قائمة السباحين مع التزامهم اليوم.
   const loadSwimmers = async () => {
     const res = await fetch('/api/admin/swimmers');
     const d = await res.json();
@@ -39,11 +111,14 @@ export function AdminDashboard() {
     setLoadingSwimmers(false);
   };
 
+  // عند أول ظهور: نجلب الإحصائيات والسباحين معًا.
   useEffect(() => {
     load();
     loadSwimmers();
   }, []);
 
+  // updateUser: تغيير دور أو حالة مستخدم عبر PATCH.
+  // (PATCH = تعديل جزئي لبيانات موجودة).
   async function updateUser(userId: string, patch: { status?: string; role?: string }) {
     setMessage(null);
     const res = await fetch('/api/admin/overview', {
@@ -57,11 +132,13 @@ export function AdminDashboard() {
     }
   }
 
+  // لو ما زال التحميل ولم تصل بيانات بعد → نعرض رسالة مؤقتة.
   if (loading && !data) {
     return <Card><p className="py-12 text-center text-sm text-slate-400">جارٍ التحميل…</p></Card>;
   }
 
   const stats = data.stats;
+  // statCards: مصفوفة تصف بطاقات الإحصائيات الخمس (أيقونة + اسم + قيمة).
   const statCards = [
     { icon: Users, label: 'المستخدمون', value: stats.totalUsers },
     { icon: FileText, label: 'خطط غذائية', value: `${stats.activePlans} نشطة / ${stats.totalPlans}` },
@@ -82,11 +159,14 @@ export function AdminDashboard() {
             <p className="text-sm text-slate-500">نظرة شاملة على المنصة وإدارة المستخدمين.</p>
           </div>
         </div>
+        {/* جرس النشاط الشامل (مكوّن منفصل) */}
         <AdminActivityBell />
       </div>
 
+      {/* رسالة النجاح بعد تحديث مستخدم */}
       {message && <div className="mb-4"><Alert variant="success">{message}</Alert></div>}
 
+      {/* بطاقات الإحصائيات الخمس — map: نعرض بطاقة لكل عنصر */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {statCards.map((s) => (
           <Card key={s.label} className="flex items-center gap-3">
@@ -109,6 +189,7 @@ export function AdminDashboard() {
               التزام السباحين اليوم
             </h2>
             <div className="flex flex-wrap items-center gap-2">
+              {/* رابط تحميل تقرير PDF (تنزيل مباشر عبر السمة download) */}
               <a
                 href="/api/admin/reports?format=pdf"
                 download
@@ -116,6 +197,7 @@ export function AdminDashboard() {
               >
                 تقرير PDF
               </a>
+              {/* رابط تحميل تقرير Excel (CSV) */}
               <a
                 href="/api/admin/reports?format=csv"
                 download
@@ -132,10 +214,11 @@ export function AdminDashboard() {
             <EmptyState icon={<Users className="h-10 w-10" />} title="لا يوجد سباحون بعد" />
           ) : (
             <>
-              {/* بطاقات للجوال */}
+              {/* بطاقات للجوال (تظهر على الشاشات الصغيرة فقط lg:hidden) */}
               <div className="space-y-3 lg:hidden">
                 {swimmers.map((s) => {
                   const a = s.adherence;
+                  // bar: رسم شريط تقدم بلون حسب النسبة (أخضر/أصفر/أحمر).
                   const bar = (key: string) => {
                     const pct = a?.[key];
                     const val = pct ?? 0;
@@ -183,6 +266,7 @@ export function AdminDashboard() {
                       )}
 
                       <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2">
+                        {/* map: شريط التزام لكل مغذي (سعرات/بروتين/كارب/دهون/ماء) */}
                         {(['calories', 'protein', 'carbs', 'fat', 'water'] as const).map((key) => {
                           const label = key === 'protein' ? 'بروتين' : key === 'carbs' ? 'كربوهيدرات' : key === 'fat' ? 'دهون' : key === 'water' ? 'ماء' : 'سعرات';
                           const pct = a?.[key];
@@ -202,7 +286,7 @@ export function AdminDashboard() {
                 })}
               </div>
 
-              {/* جدول للحاسوب */}
+              {/* جدول للحاسوب (يظهر فقط على الشاشات الكبيرة) */}
               <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full min-w-[900px] text-sm">
                   <thead>
@@ -314,6 +398,7 @@ export function AdminDashboard() {
             <EmptyState title="لا يوجد مستخدمون" />
           ) : (
             <div className="space-y-2.5">
+              {/* map: بطاقة لكل مستخدم مع قائمة الدور وأزرار التعليق/التفعيل */}
               {data.users.map((u: any) => (
                 <div key={u.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
                   <div className="min-w-0">
@@ -323,6 +408,7 @@ export function AdminDashboard() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge color={ROLE_BADGE[u.role] ?? 'slate'}>{ROLES[u.role as keyof typeof ROLES] ?? u.role}</Badge>
+                    {/* قائمة تغيير الدور — نرسل PATCH عند الاختيار */}
                     <select
                       value={u.role}
                       onChange={(e) => updateUser(u.id, { role: e.target.value })}
@@ -330,6 +416,7 @@ export function AdminDashboard() {
                     >
                       {Object.entries(ROLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
+                    {/* شرط: نشط → زر "تعليق"، معلق → زر "تفعيل" */}
                     {u.status === 'active' ? (
                       <Button size="sm" variant="secondary" onClick={() => updateUser(u.id, { status: 'suspended' })}>
                         <Ban className="h-3.5 w-3.5" />
@@ -351,6 +438,7 @@ export function AdminDashboard() {
         <div className="space-y-5">
           <Card>
             <h2 className="mb-3 text-base font-bold text-ocean-900">التوزيع بالأدوار</h2>
+            {/* map: عدد المستخدمين لكل دور */}
             <div className="space-y-2">
               {Object.entries(ROLES).map(([k, v]) => (
                 <div key={k} className="flex items-center justify-between text-sm">
@@ -363,6 +451,7 @@ export function AdminDashboard() {
 
           <Card>
             <h2 className="mb-3 text-base font-bold text-ocean-900">آخر الأحداث (Audit)</h2>
+            {/* الأحداث الأخيرة: سجل من يفعل ماذا في النظام */}
             {data.recentAudit.length === 0 ? (
               <p className="text-sm text-slate-400">لا توجد أحداث.</p>
             ) : (
@@ -379,6 +468,7 @@ export function AdminDashboard() {
 
           <Card>
             <h2 className="mb-3 text-base font-bold text-ocean-900">صفحات المحتوى</h2>
+            {/* صفحات المحتوى (السياسات والإخلاءات) المعروفة لدى النظام */}
             {data.contentPages.length === 0 ? (
               <p className="text-sm text-slate-400">لا توجد صفحات محتوى.</p>
             ) : (

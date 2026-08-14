@@ -1,7 +1,60 @@
+/*
+==================================================
+شرح الملف للمبتدئ
+==================================================
+
+اسم الملف:
+src/components/wearables/wearables-page.tsx
+
+وظيفة الملف:
+صفحة ربط الساعات الذكية — تعرض كل مزودي الأجهزة
+(Apple Health، Google Health Connect، Samsung Health، Fitbit،
+Garmin، Huawei... والإدخال اليدوي) مع:
+- زر ربط/فك ربط كل مزود.
+- زر مزامنة لكل جهاز مرتبط + عرض آخر مزامنة.
+- شارة حالة (مرتبط/متاح/قريبًا).
+- نموذج إدخال يدوي للأنشطة (خطوات، نوم، نبض) والتدريبات (سباحة/جيم).
+
+لماذا نحتاجه؟
+بدون هذه الصفحة لا يستطيع السباح إيصال بيانات ساعته الذكية
+إلى النظام — وهي مصدر أساسي لحساب احتياجات الطاقة اليومية
+وتحديث الخطة تلقائيًا.
+
+'use client':
+يعمل في المتصفح لأنه يستخدم useState/useEffect وfetch ونماذج.
+
+متى يعمل؟
+عند فتح /wearables.
+
+من يستدعي هذا الملف؟
+src/app/wearables/page.tsx.
+
+الملفات التي يتعامل معها:
+- API: /api/wearables/providers (القائمة)، connect، sync، disconnect،
+  /api/health/activity و/api/health/workouts (الإدخال اليدوي).
+- AppShell: هيكل الصفحة بعد الدخول.
+- مكونات: Card، Badge، Alert، Button.
+
+ترتيب العمل:
+1. نجلب قائمة المزودين وحالات الربط ↓
+2. "ربط الجهاز" → POST connect (OAuth للمزود الرسمي) ↓
+3. "مزامنة الآن" → POST sync (جلب أحدث بيانات الجهاز) ↓
+4. "إلغاء الربط" → POST disconnect ↓
+5. إدخال يدوي: نموذجان (نشاط اليوم / تسجيل تمرين)
+==================================================
+*/
+
 'use client';
 
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// useCallback (دالة محفوظة)، useEffect (تحميل أولي)، useState (حالة).
 import { useCallback, useEffect, useState } from 'react';
+// Link: رابط لوحة التحكم.
 import Link from 'next/link';
+// أيقونات من lucide-react لكل مزود وأزرار.
 import {
   Watch,
   Apple,
@@ -22,19 +75,28 @@ import {
   PenIcon,
   X,
 } from 'lucide-react';
+// AppShell: الهيكل العام بعد الدخول (هيدر + فيوتر).
 import { AppShell } from '@/components/layout/app-shell';
+// مكونات واجهة.
 import { Card, Badge, Alert } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+// أدوات مساعدة.
 import { formatShortDate, cn } from '@/lib/utils';
+// SessionUser: نوع بيانات المستخدم من الجلسة.
 import type { SessionUser } from '@/lib/auth';
 
+// ========================================
+// 2. الأنواع والبيانات الثابتة
+// ========================================
+
+// ProviderRow: صف واحد في قائمة المزودين.
 interface ProviderRow {
   id: string;
   nameAr: string;
   nameEn: string;
-  requiresOAuth: boolean;
-  configured: boolean;
-  available: boolean;
+  requiresOAuth: boolean; // هل الربط عبر نظام OAuth الرسمي؟
+  configured: boolean; // هل لدينا بيانات اعتماد رسمية في الخادم؟
+  available: boolean; // هل يمكن استخدامه الآن؟
   descriptionAr: string;
   connection: {
     id: string;
@@ -48,6 +110,7 @@ interface ProviderRow {
   } | null;
 }
 
+// ICONS: الأيقونة المعروضة لكل مزود.
 const ICONS: Record<string, React.ReactNode> = {
   appleHealth: <Apple className="h-6 w-6" />,
   healthConnect: <Smartphone className="h-6 w-6" />,
@@ -65,14 +128,26 @@ const ICONS: Record<string, React.ReactNode> = {
   manual: <PenIcon className="h-6 w-6" />,
 };
 
+// ========================================
+// 3. المكوّن الرئيسي: WearablesPage
+// ========================================
+
+// WearablesPage: صفحة ربط الساعات الذكية.
+// Props: user — بيانات المستخدم الحالي (تمرر إلى AppShell).
 export function WearablesPage({ user }: { user: SessionUser }) {
+  // providers: قائمة المزودين مع حالات الربط.
   const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [loading, setLoading] = useState(true);
+  // busyId: أي مزود يجري عليه إجراء الآن (يعطّل أزراره).
   const [busyId, setBusyId] = useState<string | null>(null);
+  // message: رسالة الحالة (نجاح/خطأ) تظهر أعلى الصفحة.
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  // showManual: هل نموذج الإدخال اليدوي مفتوح؟
   const [showManual, setShowManual] = useState(false);
+  // tab: تبويب الإدخال اليدوي (نشاط أم تدريب).
   const [tab, setTab] = useState<'activity' | 'workout'>('activity');
 
+  // load: جلب قائمة المزودين من الخادم.
   const load = useCallback(async () => {
     const res = await fetch('/api/wearables/providers');
     const d = await res.json();
@@ -80,10 +155,12 @@ export function WearablesPage({ user }: { user: SessionUser }) {
     setLoading(false);
   }, []);
 
+  // عند أول ظهور نجلب القائمة.
   useEffect(() => {
     load();
   }, [load]);
 
+  // api: اختصار لإرسال POST إلى أي مسار مع جسم JSON.
   const api = async (url: string, body?: unknown): Promise<{ ok: boolean; message?: string; error?: string }> => {
     const res = await fetch(url, {
       method: 'POST',
@@ -93,6 +170,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
     return res.json();
   };
 
+  // connect: ربط مزود (أو تفعيل الإدخال اليدوي).
   const connect = async (p: ProviderRow) => {
     setBusyId(p.id);
     setMessage(null);
@@ -103,6 +181,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
       await load();
       return;
     }
+    // الإدخال اليدوي لا يحتاج OAuth — مجرد تفعيل.
     if (p.id === 'manual') {
       setMessage({ type: 'ok', text: 'تم تفعيل الإدخال اليدوي — سجّل نشاطك وتدريباتك الآن.' });
       await load();
@@ -120,6 +199,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
     await load();
   };
 
+  // sync: طلب مزامنة فورية لجهاز مرتبط.
   const sync = async (p: ProviderRow) => {
     if (!p.connection) return;
     setBusyId(p.id);
@@ -130,6 +210,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
     await load();
   };
 
+  // disconnect: إلغاء ربط جهاز.
   const disconnect = async (p: ProviderRow) => {
     if (!p.connection) return;
     setBusyId(p.id);
@@ -140,11 +221,14 @@ export function WearablesPage({ user }: { user: SessionUser }) {
     await load();
   };
 
+  // manual: صف "الإدخال اليدوي" (يوجد دائمًا في القائمة).
   const manual = providers.find((p) => p.id === 'manual');
+  // connectedCount: عدد الأجهزة المرتبطة فعليًا (للشارة في الرأس).
   const connectedCount = providers.filter((p) => p.connection?.status === 'connected').length;
 
   return (
     <AppShell user={user}>
+      {/* رأس الصفحة + شارة عدد الأجهزة */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-black text-ocean-900">
@@ -168,7 +252,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
         </div>
       )}
 
-      {/* بطاقة الرجوع للوحة */}
+      {/* بطاقة الخصوصية + زر لوحة التحكم */}
       <Card className="mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-8 w-8 shrink-0 text-emerald-600" />
@@ -184,7 +268,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
         </Link>
       </Card>
 
-      {/* الإدخال اليدوي */}
+      {/* الإدخال اليدوي: بطاقة ذهبية بنموذجين */}
       <Card className="mb-5 border-gold-200 bg-gold-300/10 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -204,6 +288,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
           </Button>
         </div>
 
+        {/* النماذج تظهر عند الفتح — تمرر callbacks لرسالة النجاح وإعادة التحميل */}
         {showManual && (
           <ManualForms
             tab={tab}
@@ -222,6 +307,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
         <p className="text-sm text-slate-400">جارٍ التحميل…</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* map: بطاقة لكل مزود (باستثناء manual الظاهر أعلاه) */}
           {providers
             .filter((p) => p.id !== 'manual')
             .map((p) => {
@@ -229,6 +315,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
               const busy = busyId === p.id;
               return (
                 <Card key={p.id} className="flex flex-col p-4">
+                  {/* الأيقونة + شارة الحالة */}
                   <div className="flex items-start justify-between gap-2">
                     <div className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl', connected ? 'bg-emerald-100 text-emerald-600' : 'bg-ocean-50 text-ocean-600')}>
                       {ICONS[p.id] ?? <Watch className="h-6 w-6" />}
@@ -240,6 +327,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
                   <h3 className="mt-3 text-sm font-black text-ocean-900">{p.nameAr}</h3>
                   <p className="mt-1 flex-1 text-xs leading-relaxed text-slate-500">{p.descriptionAr}</p>
 
+                  {/* معلومات الاتصال (جهاز + آخر مزامنة + أخطاء) */}
                   {connected && p.connection ? (
                     <div className="mt-3 space-y-1 rounded-xl bg-slate-50 p-3 text-[11px]">
                       <div className="flex items-center justify-between">
@@ -263,6 +351,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
                     </div>
                   )}
 
+                  {/* أزرار الإجراء حسب الحالة */}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {connected ? (
                       <>
@@ -287,7 +376,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
         </div>
       )}
 
-      {/* كيف تعمل المزامنة */}
+      {/* كيف تعمل المزامنة: شرح مبسط بالخطوات */}
       <Card className="mt-5 p-4 sm:p-5">
         <h2 className="mb-3 text-base font-bold text-ocean-900">كيف تتغيّر خطتك تلقائيًا؟</h2>
         <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-600">
@@ -308,6 +397,11 @@ export function WearablesPage({ user }: { user: SessionUser }) {
 
 /* ====================== الإدخال اليدوي ====================== */
 
+// ManualForms: النماذج اليدوية (نشاط اليوم / تسجيل تمرين).
+// Props:
+// - tab: التبويب النشط.
+// - setTab: تغيير التبويب.
+// - onSaved: دالة تستدعى بعد نجاح الحفظ (تعرض الرسالة وتحدّث القائمة).
 function ManualForms({
   tab,
   setTab,
@@ -320,14 +414,14 @@ function ManualForms({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // نشاط
+  // حقول "نشاط اليوم".
   const [steps, setSteps] = useState('');
   const [activeCals, setActiveCals] = useState('');
   const [workoutMin, setWorkoutMin] = useState('');
   const [sleepH, setSleepH] = useState('');
   const [avgHr, setAvgHr] = useState('');
 
-  // تدريب
+  // حقول "تسجيل تمرين".
   const [sportType, setSportType] = useState('swim');
   const [duration, setDuration] = useState('');
   const [distance, setDistance] = useState('');
@@ -336,6 +430,7 @@ function ManualForms({
   const [swolf, setSwolf] = useState('');
   const [intensity, setIntensity] = useState('moderate');
 
+  // saveActivity: حفظ نشاط اليوم عبر /api/health/activity.
   const saveActivity = async () => {
     setBusy(true);
     setErr(null);
@@ -348,7 +443,7 @@ function ManualForms({
           steps: steps ? Number(steps) : 0,
           activeCalories: activeCals ? Number(activeCals) : undefined,
           workoutMinutes: workoutMin ? Number(workoutMin) : undefined,
-          sleepMinutes: sleepH ? Number(sleepH) * 60 : undefined,
+          sleepMinutes: sleepH ? Number(sleepH) * 60 : undefined, // نحول الساعات إلى دقائق
           avgHeartRate: avgHr ? Number(avgHr) : undefined,
         },
       }),
@@ -362,6 +457,7 @@ function ManualForms({
     onSaved('تم حفظ نشاط اليوم — أُعيد حساب هدفك الغذائي.');
   };
 
+  // saveWorkout: حفظ تمرين عبر /api/health/workouts.
   const saveWorkout = async () => {
     setBusy(true);
     setErr(null);
@@ -373,7 +469,7 @@ function ManualForms({
         workouts: [
           {
             sportType,
-            startTime: new Date().toISOString(),
+            startTime: new Date().toISOString(), // وقت البدء = الآن
             durationMin: duration ? Number(duration) : undefined,
             distanceM: distance ? Number(distance) : undefined,
             caloriesBurned: calories ? Number(calories) : undefined,
@@ -393,10 +489,12 @@ function ManualForms({
     onSaved('تم تسجيل التدريب — حدّثنا هدف الطاقة والسعرات المتبقية.');
   };
 
+  // input: فئة الحقول (نفس الاسم المستخدم في كل النموذج).
   const input = 'input';
 
   return (
     <div className="mt-4">
+      {/* أزرار التبويبين */}
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant={tab === 'activity' ? 'primary' : 'secondary'} onClick={() => setTab('activity')}>
           <Footprints className="h-4 w-4" /> نشاط اليوم
@@ -413,6 +511,7 @@ function ManualForms({
       )}
 
       {tab === 'activity' ? (
+        /* ===== نموذج نشاط اليوم ===== */
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs font-bold text-slate-600">الخطوات</span>
@@ -442,6 +541,7 @@ function ManualForms({
           </div>
         </div>
       ) : (
+        /* ===== نموذج تسجيل تمرين ===== */
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-xs font-bold text-slate-600">نوع التمرين</span>

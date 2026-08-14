@@ -1,8 +1,63 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/fitbit-mapping.ts
+
+وظيفة الملف:
+"قاموس الترجمة" الخاص بـ Fitbit — يستقبل البيانات الخام
+التي ترسلها Fitbit (بأسماء حقولها الخاصة) ويعيدها بصيغة
+الموقع الموحّدة. مثال: اسم النشاط "Lap Swimming" يتحول إلى
+sportType = 'swim'، والمدة من مللي ثانية إلى دقائق.
+
+لماذا نحتاجه؟
+Fitbit لا تعرف لغتنا (صيغتنا الموحّدة)، ونحن لا نريد أن نلمس
+تفاصيلها في كل مكان. كل ترجمة Fitbit هنا في هذا الملف وحده.
+
+لماذا هذا الملف "نقي" (بدون تبعيات)؟
+الدوال هنا لا تستدعي قاعدة البيانات ولا الساعة — فقط تحوّل
+كائنًا إلى كائن. هذا يجعلها سهلة الاختبار (ملف .test.ts مرافق).
+
+متى يعمل؟
+عند مزامنة Fitbit (في fitbit.ts) لكل يوم ولكل تمرين.
+
+من يستدعيه؟
+- src/lib/wearables/fitbit.ts (جالب Fitbit).
+- src/lib/wearables/fitbit-mapping.test.ts (الاختبارات).
+
+الملفات التي يتعامل معها:
+- لا يستورد من أي ملف — دوال خالصة (Pure Functions).
+  يبني صورتها من واجهة Fitbit API v1.
+
+ترتيب العمل:
+استجابة Fitbit ← دوال map* ← صيغة موحّدة تفهمها normalize.ts
+=================================================
+*/
+
+// ========================================
+// 1. تصنيف الرياضة وتحويل الوحدات
+// ========================================
+
 /**
  * تحويلات Fitbit النقية (بدون تبعيات) — قابلة للاختبار وحدة.
  * Fitbit API v1: https://dev.fitbit.com/build/reference/web-api/
  */
 
+/*
+-----------------------------------------
+الدالة: mapFitbitSport
+-----------------------------------------
+وظيفتها: تصنيف نشاط Fitbit (من اسمه أو activityTypeId)
+         إلى صيغتنا الموحّدة: swim / run / cycle / walk / gym / other.
+Input: name (اسم النشاط) + activityTypeId اختياري (معرّف Fitbit).
+Processing: نفحص الاسم بعد تحويله لأحرف كبيرة ونبحث عن كلمات
+            (SWIM, RUN...) أو نطابق معرّفات النوع المعروفة.
+Output: نص النوع الموحّد.
+يستدعيها: mapFitbitWorkout.
+-----------------------------------------
+*/
 /** تصنيف نشاط Fitbit إلى صيغتنا الموحّدة من الاسم ونوع النشاط. */
 export function mapFitbitSport(name: string, activityTypeId?: number): string {
   const n = (name ?? '').toUpperCase();
@@ -26,6 +81,17 @@ export function mapFitbitSport(name: string, activityTypeId?: number): string {
   return 'other';
 }
 
+/*
+-----------------------------------------
+الدالة: parseFitbitDuration
+-----------------------------------------
+وظيفتها: تحويل مدة Fitbit من مللي ثانية إلى دقائق.
+Input: ms (قد تكون null/undefined).
+Processing: نتجاهل القيم السالبة وغير الرقمية ونقرّب لأقرب دقيقة.
+Output: عدد الدقائق، أو undefined عندما تكون القيمة غير صالحة.
+يستدعيها: mapFitbitWorkout.
+-----------------------------------------
+*/
 /** مدة Fitbit (مللي ثانية) → دقائق. */
 export function parseFitbitDuration(ms: number | null | undefined): number | undefined {
   if (ms == null) return undefined;
@@ -34,6 +100,17 @@ export function parseFitbitDuration(ms: number | null | undefined): number | und
   return Math.round(n / 60000);
 }
 
+/*
+-----------------------------------------
+الدالة: fitbitDistanceToMeters
+-----------------------------------------
+وظيفتها: تحويل مسافة Fitbit من كيلومتر إلى متر.
+Input: km (قد تكون null/undefined).
+Processing: نتجاهل القيم السالبة وغير الرقمية، ثم نضرب في 1000.
+Output: المسافة بالمتر، أو undefined.
+يستدعيها: mapFitbitWorkout.
+-----------------------------------------
+*/
 /** مسافة Fitbit (كم) → متر. */
 export function fitbitDistanceToMeters(km: number | null | undefined): number | undefined {
   if (km == null) return undefined;
@@ -42,6 +119,23 @@ export function fitbitDistanceToMeters(km: number | null | undefined): number | 
   return Math.round(n * 1000);
 }
 
+// ========================================
+// 2. تحويل استجابات Fitbit إلى الصيغة الموحّدة
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: mapFitbitActivitySummary
+-----------------------------------------
+وظيفتها: تحويل ملخص نشاط اليوم من Fitbit إلى الصيغة الموحّدة.
+Input: raw (استجابة /activities/date/{date}.json).
+Processing: نقرأ من summary الخطوات والسعرات (النشطة/الراحة/الكلي)
+            والمسافات، ونحسب دقائق النشاط من الدقائق النشطة.
+            القيم الصفرية تُحوَّل إلى undefined كي لا نكتب أصفارًا مضللة.
+Output: كائن بالصيغة الموحّدة (steps, distanceM, activeCalories...).
+يستدعيها: fitbit.ts (لكل يوم من أيام المزامنة).
+-----------------------------------------
+*/
 /** تحويل سجل نشاط Fitbit → صيغة النشاط الموحّدة. */
 export function mapFitbitActivitySummary(raw: Record<string, unknown>): Record<string, unknown> {
   const summary = (raw.summary ?? {}) as Record<string, unknown>;
@@ -69,6 +163,17 @@ export function mapFitbitActivitySummary(raw: Record<string, unknown>): Record<s
   };
 }
 
+/*
+-----------------------------------------
+الدالة: mapFitbitSleep
+-----------------------------------------
+وظيفتها: استخراج دقائق النوم ومعدل نبض الراحة من استجابة النوم.
+Input: raw (استجابة /sleep/date/{date}.json).
+Processing: نقرأ totalMinutesAsleep و restingHeartRate من summary.
+Output: كائن قد يحتوي sleepMinutes و/أو restingHeartRate.
+يستدعيها: fitbit.ts (لكل يوم).
+-----------------------------------------
+*/
 /** استخراج دقائق النوم ومعدل نبض الراحة من استجابة نوم Fitbit. */
 export function mapFitbitSleep(raw: Record<string, unknown>): { sleepMinutes?: number; restingHeartRate?: number } {
   const summary = (raw.summary ?? {}) as Record<string, unknown>;
@@ -80,6 +185,17 @@ export function mapFitbitSleep(raw: Record<string, unknown>): { sleepMinutes?: n
   return out;
 }
 
+/*
+-----------------------------------------
+الدالة: mapFitbitHeart
+-----------------------------------------
+وظيفتها: استخراج معدل نبض الراحة من استجابة النبض اليومية.
+Input: raw (استجابة /activities/heart/date/{date}/1d.json).
+Processing: نقرأ أول عنصر من activities-heart.
+Output: { restingHeartRate } أو كائن فارغ إن لم يوجد.
+يستدعيها: fitbit.ts (لكل يوم).
+-----------------------------------------
+*/
 /** استخراج معدل نبض الراحة من استجابة النبض اليومية. */
 export function mapFitbitHeart(raw: Record<string, unknown>): { restingHeartRate?: number } {
   const list = (raw['activities-heart'] as Array<{ value?: { restingHeartRate?: number } }> | undefined) ?? [];
@@ -88,6 +204,19 @@ export function mapFitbitHeart(raw: Record<string, unknown>): { restingHeartRate
   return {};
 }
 
+/*
+-----------------------------------------
+الدالة: mapFitbitWorkout
+-----------------------------------------
+وظيفتها: تحويل سجل تمرين من قائمة النشاطات إلى صيغة التدريب الموحّدة.
+Input: raw (عنصر من /activities/list.json).
+Processing: نصنّف الرياضة ونحول المدة (ms → دقائق) والمسافة
+            (كم → متر) ونبني externalId بصيغة fitbit-<logId>.
+Output: كائن بالصيغة الموحّدة للتدريب.
+يستدعيها: fitbit.ts (في getWorkouts).
+ماذا تستدعي: mapFitbitSport + parseFitbitDuration + fitbitDistanceToMeters.
+-----------------------------------------
+*/
 /** تحويل سجل نشاط/تمرين من قائمة النشاطات إلى صيغة التدريب الموحّدة. */
 export function mapFitbitWorkout(raw: Record<string, unknown>): Record<string, unknown> {
   const name = String(raw.name ?? raw.activityName ?? '');

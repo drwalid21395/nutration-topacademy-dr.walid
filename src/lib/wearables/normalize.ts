@@ -1,3 +1,50 @@
+/*
+=================================================
+شرح الملف للمبتدئ
+=================================================
+
+اسم الملف:
+src/lib/wearables/normalize.ts
+
+وظيفة الملف:
+محرك "التطبيع" (Normalization) — يحوّل أي بيانات خام من أي
+ساعة (أسماء حقول متعددة الأشكال) إلى الصيغة الموحّدة، ويستخرج
+مكوّنات الطاقة بعناية حتى لا نحسب السعرات مرتين، ويحسب درجة
+حمولة التدريب.
+
+لماذا نحتاجه؟
+مصادر البيانات مختلفة: كل ساعة تسمي الحقول بأسماء مختلفة
+(steps أو steps_count أو steps_counted...). التطبيع يجعل
+كل شيء بصيغة واحدة آمنة قبل الدخول إلى قاعدة البيانات.
+
+القاعدة الحرجة:
+لا نضيف أو نطرح قيم الساعات كما هي. المزودون يختلفون في
+طريقة حساب الإنفاق، وقد يشمل "إجمالي المحروق" سعرات الراحة
+(BMR). لذلك نفصل: activeCalories (نشاط فقط — يُعتمد للتعديل
+الغذائي)، restingCalories (راحة/BMR)، workoutCalories (سعرات
+الجلسات)، totalCaloriesBurned (مجموع الجهاز).
+
+متى يعمل؟
+عند كل إدخال بيانات من ساعة (في ingestActivity و ingestWorkouts).
+
+من يستدعيه؟
+- src/lib/wearables/sync.ts (خط المزامنة).
+- src/lib/nutrition/dynamic.ts (حساب حمولة التدريب).
+
+الملفات التي يتعامل معها:
+- ./types: الصيغ الموحّدة UnifiedDailyActivity و UnifiedWorkout.
+
+ترتيب العمل:
+normalizeDailyActivity / normalizeWorkout ← extractEnergy ←
+computeTrainingLoad
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// من ملف محلي ./types: الصيغ الموحّدة للنشاط والتدريب.
 import { UnifiedDailyActivity, UnifiedWorkout } from './types';
 
 /**
@@ -12,8 +59,16 @@ import { UnifiedDailyActivity, UnifiedWorkout } from './types';
  *   - totalCaloriesBurned = مجموع ما يعرضه الجهاز (قد يتضمن BMR).
  */
 
+// ========================================
+// 2. الأنواع: الثقة ومكوّنات الطاقة
+// ========================================
+
+// Confidence: درجة ثقتنا في القيم — عالية (من بيانات صريحة)
+// أو وسط أو تقديرية.
 export type Confidence = 'high' | 'medium' | 'estimated';
 
+// NormalizedEnergy: مكوّنات الطاقة الأربعة المفصولة بعناية
+// (نشاط / راحة / تدريب / إجمالي الجهاز) + درجة الثقة.
 export interface NormalizedEnergy {
   activeCalories: number;
   restingCalories: number;
@@ -22,6 +77,23 @@ export interface NormalizedEnergy {
   confidence: Confidence;
 }
 
+// ========================================
+// 3. تطبيع النشاط اليومي
+// ========================================
+
+/*
+-----------------------------------------
+الدالة: normalizeDailyActivity (مصدَّرة)
+-----------------------------------------
+وظيفتها: تحويل بيانات نشاط خام من أي مزود إلى النموذج الموحّد.
+Input: raw (كائن خام بأي أسماء حقول).
+Processing: نمرر كل قيمة عبر num (أرقام موجبة فقط — السالب
+            وغير الرقمي يتحول إلى undefined)، ونتقبل عدة أسماء
+            للحقل نفسه (مثلاً distanceM أو distance_meters أو distance).
+Output: UnifiedDailyActivity.
+يستدعيها: sync.ts (في ingestActivity).
+-----------------------------------------
+*/
 /** تحويل بيانات أولية من مزود إلى نموذج موحّد بأمان (أرقام موجبة فقط). */
 export function normalizeDailyActivity(raw: Record<string, unknown>): UnifiedDailyActivity {
   const num = (v: unknown): number | undefined => {
@@ -47,6 +119,25 @@ export function normalizeDailyActivity(raw: Record<string, unknown>): UnifiedDai
  * استخراج مكوّنات الطاقة من بيانات يوم بلا مضاعفة:
  * تُستخدم السعرات النشطة فقط (Active Calories) للتعديل الغذائي.
  */
+
+/*
+-----------------------------------------
+الدالة: extractEnergy (مصدَّرة)
+-----------------------------------------
+وظيفتها: استخراج مكوّنات الطاقة من بيانات يوم "بلا مضاعفة".
+Input: activity (نشاط يوم موحّد).
+Processing: نأخذ كل مكوّن على حدة؛ إن غابت سعرات الراحة نقدّرها
+            من (الإجمالي - النشط). لا نضيف القيم فوق بعضها أبدًا
+            لأن بعض الأجهزة تعرض النشط ضمن الإجمالي.
+Output: NormalizedEnergy مع درجة ثقة (high عندما يتوفر النشط
+        والإجمالي صراحةً، وإلا estimated).
+يستدعيها: sync.ts (في ingestActivity).
+ملاحظة تعليمية:
+يمكن كتابة هذا الجزء بطريقة أخرى أكثر احترافية (مثل استبعاد
+الصفوف منخفضة الثقة تمامًا)، لكننا سنتركه حاليًا كما هو
+حتى لا نغير سلوك المشروع.
+-----------------------------------------
+*/
 export function extractEnergy(activity: UnifiedDailyActivity): NormalizedEnergy {
   const total = activity.totalCaloriesBurned ?? 0;
   const active = activity.activeCalories ?? 0;
@@ -67,6 +158,19 @@ export function extractEnergy(activity: UnifiedDailyActivity): NormalizedEnergy 
   };
 }
 
+/*
+-----------------------------------------
+الدالة: normalizeWorkout (مصدَّرة)
+-----------------------------------------
+وظيفتها: تطبيع جلسة تدريب خام إلى الصيغة الموحّدة.
+Input: raw (كائن خام بأي أسماء حقول).
+Processing: مثل تطبيع النشاط — أرقام موجبة فقط + تقبّل عدة
+            أسماء للحقل + تحديد نوع الرياضة ودرجة الثقة
+            (إن لم يُحدَّد المصدر → 'estimated').
+Output: UnifiedWorkout.
+يستدعيها: sync.ts (في ingestWorkouts).
+-----------------------------------------
+*/
 /** تطبيع جلسة تدريب أولية إلى الصيغة الموحّدة. */
 export function normalizeWorkout(raw: Record<string, unknown>): UnifiedWorkout {
   const num = (v: unknown): number | undefined => {
@@ -93,6 +197,21 @@ export function normalizeWorkout(raw: Record<string, unknown>): UnifiedWorkout {
   };
 }
 
+/*
+-----------------------------------------
+الدالة: computeTrainingLoad (مصدَّرة)
+-----------------------------------------
+وظيفتها: حساب "درجة حمولة التدريب" من البيانات الفعلية
+         (خطوات + دقائق تدريب + مسافة سباحة) — وليس من السعرات
+         وحدها. تُستخدم في الرسائل وتعديل الهدف الغذائي.
+Input: activity (نشاط اليوم) + workouts (تدريبات اليوم).
+Processing: نجمع نقاطًا: الخطوات (حتى 25)، دقائق التدريب (حتى 40)،
+            ومسافة السباحة (حتى 15). ثم نحول المجموع إلى تصنيف:
+            veryHigh / hard / moderate / light / rest.
+Output: { label, score } حيث score من 0 إلى 100.
+يستدعيها: dynamic.ts و sync.ts.
+-----------------------------------------
+*/
 /** درجة تحميل التدريب من البيانات الفعلية (وليس من السعرات وحدها). */
 export function computeTrainingLoad(activity: UnifiedDailyActivity, workouts: UnifiedWorkout[]): { label: string; score: number } {
   const totalWorkoutMin = workouts.reduce((a, w) => a + (w.durationMin ?? 0), 0);

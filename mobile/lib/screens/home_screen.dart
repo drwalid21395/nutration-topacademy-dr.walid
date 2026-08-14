@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _load();
     _autoTimer = Timer.periodic(
-      Duration(seconds: AppConfig.autoSyncIntervalSeconds),
+      const Duration(seconds: AppConfig.autoSyncIntervalSeconds),
       (_) => _sync(auto: true),
     );
   }
@@ -160,17 +160,17 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.watch, color: Color(0xFF0F766E)),
-                const SizedBox(width: 8),
-                Text('الموقع', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                Icon(Icons.watch, color: Color(0xFF0F766E)),
+                SizedBox(width: 8),
+                Text('الموقع', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               ],
             ),
             const SizedBox(height: 8),
-            Text(
+            const Text(
               AppConfig.apiBase,
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
+              style: TextStyle(fontSize: 12, color: Colors.grey),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),

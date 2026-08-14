@@ -59,3 +59,6 @@ public/uploads/*
 .vercel
 .env*
 .neon
+
+# Android SDK (أدوات البناء — داخل المشروع على القرص D)
+/android-sdk

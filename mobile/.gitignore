@@ -15,3 +15,10 @@ ios/.symlinks/
 # المفاتيح والسرية
 *.jks
 *.keystore
+
+# ملفات مولّدة تلقائيًا خاصة بجهاز المطوّر
+ios/Flutter/Generated.xcconfig
+ios/Flutter/ephemeral/
+ios/Flutter/flutter_export_environment.sh
+ios/Runner/GeneratedPluginRegistrant.h
+ios/Runner/GeneratedPluginRegistrant.m

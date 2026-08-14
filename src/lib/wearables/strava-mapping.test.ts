@@ -1,5 +1,26 @@
+/*
+=================================================
+ملف اختبار (Test) — تحويلات Strava
+=================================================
+يختبر دوال strava-mapping.ts (تصنيف الرياضة وتحويل النشاط
+مع تفاصيل السباحة).
+اسم الملف:
+src/lib/wearables/strava-mapping.test.ts
+=================================================
+*/
+
+// ========================================
+// 1. الاستيرادات
+// ========================================
+
+// describe/it/expect: من vitest (مكتبة اختبارات خارجية).
+// الدوال: من الملف المحلي ./strava-mapping (الهدف من الاختبار).
 import { describe, it, expect } from 'vitest';
 import { classifyStravaSport, mapStravaActivity } from './strava-mapping';
+
+// ========================================
+// 2. اختبار تصنيف الرياضة
+// ========================================
 
 describe('classifyStravaSport', () => {
   it('classifies swim activities', () => {
@@ -15,6 +36,10 @@ describe('classifyStravaSport', () => {
     expect(classifyStravaSport('Other', 'Rock Climbing')).toBe('other');
   });
 });
+
+// ========================================
+// 3. اختبار تحويل النشاط
+// ========================================
 
 describe('mapStravaActivity', () => {
   it('converts seconds to minutes and keeps metric meters', () => {
