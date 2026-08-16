@@ -51,6 +51,7 @@ export type WearableProviderId =
   | 'whoop'
   | 'oura'
   | 'strava'
+  | 'mobile'
   | 'manual';
 
 // WearableProviderMeta: وصف مزود للعرض في واجهة ربط الأجهزة

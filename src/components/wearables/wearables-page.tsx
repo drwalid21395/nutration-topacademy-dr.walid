@@ -57,21 +57,14 @@ import Link from 'next/link';
 // أيقونات من lucide-react لكل مزود وأزرار.
 import {
   Watch,
-  Apple,
   Smartphone,
-  HeartPulse,
-  Activity,
   Footprints,
   ShieldCheck,
   Trash2,
-  RefreshCw,
   CheckCircle2,
-  Clock,
-  AlertTriangle,
   Dumbbell,
   Waves,
   Plus,
-  Link2,
   PenIcon,
   X,
 } from 'lucide-react';
@@ -81,7 +74,7 @@ import { AppShell } from '@/components/layout/app-shell';
 import { Card, Badge, Alert } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 // أدوات مساعدة.
-import { formatShortDate, cn } from '@/lib/utils';
+import { formatShortDate } from '@/lib/utils';
 // SessionUser: نوع بيانات المستخدم من الجلسة.
 import type { SessionUser } from '@/lib/auth';
 
@@ -110,24 +103,6 @@ interface ProviderRow {
   } | null;
 }
 
-// ICONS: الأيقونة المعروضة لكل مزود.
-const ICONS: Record<string, React.ReactNode> = {
-  appleHealth: <Apple className="h-6 w-6" />,
-  healthConnect: <Smartphone className="h-6 w-6" />,
-  samsungHealth: <Smartphone className="h-6 w-6" />,
-  fitbit: <Activity className="h-6 w-6" />,
-  garmin: <Watch className="h-6 w-6" />,
-  huawei: <Smartphone className="h-6 w-6" />,
-  honor: <Watch className="h-6 w-6" />,
-  xiaomi: <Smartphone className="h-6 w-6" />,
-  amazfit: <Watch className="h-6 w-6" />,
-  polar: <HeartPulse className="h-6 w-6" />,
-  whoop: <HeartPulse className="h-6 w-6" />,
-  oura: <Clock className="h-6 w-6" />,
-  strava: <Activity className="h-6 w-6" />,
-  manual: <PenIcon className="h-6 w-6" />,
-};
-
 // ========================================
 // 3. المكوّن الرئيسي: WearablesPage
 // ========================================
@@ -138,21 +113,38 @@ export function WearablesPage({ user }: { user: SessionUser }) {
   // providers: قائمة المزودين مع حالات الربط.
   const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [loading, setLoading] = useState(true);
-  // busyId: أي مزود يجري عليه إجراء الآن (يعطّل أزراره).
-  const [busyId, setBusyId] = useState<string | null>(null);
   // message: رسالة الحالة (نجاح/خطأ) تظهر أعلى الصفحة.
   const [message, setMessage] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   // showManual: هل نموذج الإدخال اليدوي مفتوح؟
   const [showManual, setShowManual] = useState(false);
   // tab: تبويب الإدخال اليدوي (نشاط أم تدريب).
   const [tab, setTab] = useState<'activity' | 'workout'>('activity');
+  // today: نشاط اليوم الوارد من Health Connect.
+  const [today, setToday] = useState<null | {
+    steps?: number;
+    distanceM?: number | null;
+    activeCalories?: number | null;
+    workoutMinutes?: number;
+    sleepMinutes?: number | null;
+    avgHeartRate?: number | null;
+    updatedAt?: string;
+  }>(null);
+  // clearing: هل يجري مسح الشركات القديمة الآن؟
+  const [clearing, setClearing] = useState(false);
 
-  // load: جلب قائمة المزودين من الخادم.
+  // load: جلب قائمة المزودين وبيانات اليوم من الخادم.
   const load = useCallback(async () => {
     const res = await fetch('/api/wearables/providers');
     const d = await res.json();
     setProviders(d.providers ?? []);
     setLoading(false);
+    try {
+      const todayRes = await fetch('/api/health/activity');
+      const todayData = await todayRes.json();
+      setToday(todayData.activity ?? null);
+    } catch {
+      setToday(null);
+    }
   }, []);
 
   // عند أول ظهور نجلب القائمة.
@@ -170,61 +162,25 @@ export function WearablesPage({ user }: { user: SessionUser }) {
     return res.json();
   };
 
-  // connect: ربط مزود (أو تفعيل الإدخال اليدوي).
-  const connect = async (p: ProviderRow) => {
-    setBusyId(p.id);
+  // clearOldCompanies: مسح جميع اتصالات شركات الساعات القديمة دفعة واحدة.
+  const clearOldCompanies = async () => {
+    if (!confirm('سيتم حذف جميع اتصالات شركات الساعات القديمة من حسابك. هل أنت متأكد؟')) return;
+    setClearing(true);
     setMessage(null);
-    const res = await api('/api/wearables/connect', { provider: p.id });
-    setBusyId(null);
-    if (res.error) {
-      setMessage({ type: 'err', text: res.error });
-      await load();
-      return;
-    }
-    // الإدخال اليدوي لا يحتاج OAuth — مجرد تفعيل.
-    if (p.id === 'manual') {
-      setMessage({ type: 'ok', text: 'تم تفعيل الإدخال اليدوي — سجّل نشاطك وتدريباتك الآن.' });
-      await load();
-      return;
-    }
-    // إعادة الربط مع رابط OAuth عند وجود اعتماد في البيئة.
-    const raw = await fetch('/api/wearables/providers');
-    const data = await raw.json();
-    const row = (data.providers ?? []).find((x: ProviderRow) => x.id === p.id);
-    if (row?.connection?.status === 'connected') {
-      setMessage({ type: 'ok', text: 'تم الربط بنجاح ✓' });
-    } else {
-      setMessage({ type: 'ok', text: 'الربط عبر هذا المزود يتطلب بيانات اعتماد رسمية — سيصبح متاحًا قريبًا.' });
-    }
+    const res = await api('/api/wearables/disconnect-all');
+    setClearing(false);
+    setMessage({ type: res.error ? 'err' : 'ok', text: res.error ?? 'تم حذف جميع شركات الساعات القديمة ✓' });
     await load();
   };
 
-  // sync: طلب مزامنة فورية لجهاز مرتبط.
-  const sync = async (p: ProviderRow) => {
-    if (!p.connection) return;
-    setBusyId(p.id);
-    setMessage(null);
-    const res = await api('/api/wearables/sync', { connectionId: p.connection.id });
-    setBusyId(null);
-    setMessage({ type: res.error ? 'err' : 'ok', text: res.error ?? res.message ?? 'تمت المزامنة.' });
-    await load();
-  };
-
-  // disconnect: إلغاء ربط جهاز.
-  const disconnect = async (p: ProviderRow) => {
-    if (!p.connection) return;
-    setBusyId(p.id);
-    setMessage(null);
-    const res = await api('/api/wearables/disconnect', { connectionId: p.connection.id });
-    setBusyId(null);
-    setMessage({ type: res.error ? 'err' : 'ok', text: res.error ?? 'تم إلغاء الربط.' });
-    await load();
-  };
-
-  // manual: صف "الإدخال اليدوي" (يوجد دائمًا في القائمة).
-  const manual = providers.find((p) => p.id === 'manual');
-  // connectedCount: عدد الأجهزة المرتبطة فعليًا (للشارة في الرأس).
-  const connectedCount = providers.filter((p) => p.connection?.status === 'connected').length;
+  // oldCompanies: اتصالات الشركات القديمة المرتبطة فعليًا (ماعدا الموبايل واليدوي).
+  const oldCompanies = providers.filter(
+    (p) => p.id !== 'mobile' && p.id !== 'manual' && p.connection?.status === 'connected'
+  );
+  // mobile: صف تطبيق الموبايل (Health Connect) — البديل الوحيد.
+  const mobile = providers.find((p) => p.id === 'mobile');
+  const mobileConnected = mobile?.connection?.status === 'connected';
+  const mobileLastSync = mobile?.connection?.lastSyncAt ?? today?.updatedAt;
 
   return (
     <AppShell user={user}>
@@ -239,8 +195,8 @@ export function WearablesPage({ user }: { user: SessionUser }) {
             اربط جهازك لمزامنة النشاط والتدريبات والنوم — وتتحدّث خطتك الغذائية تلقائيًا على مدار اليوم.
           </p>
         </div>
-        <Badge color={connectedCount > 0 ? 'green' : 'slate'}>
-          {connectedCount > 0 ? `${connectedCount} أجهزة مرتبطة ✓` : 'لا يوجد ربط بعد'}
+        <Badge color={mobileConnected ? 'green' : 'slate'}>
+          {mobileConnected ? 'الموبايل مرتبط ✓' : 'لا يوجد ربط بعد'}
         </Badge>
       </div>
 
@@ -252,14 +208,14 @@ export function WearablesPage({ user }: { user: SessionUser }) {
         </div>
       )}
 
-      {/* بطاقة الخصوصية + زر لوحة التحكم */}
+      {/* بطاقة خصوصية + زر لوحة التحكم */}
       <Card className="mb-5 flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex items-center gap-3">
           <ShieldCheck className="h-8 w-8 shrink-0 text-emerald-600" />
           <div>
-            <p className="text-sm font-bold text-slate-800">خصوصيتك محمية</p>
+            <p className="text-sm font-bold text-slate-800">خصوصيتك محمية — لا حاجة لأي شركة ساعة</p>
             <p className="text-xs text-slate-500">
-              نستخدم OAuth الرسمي فقط، لا نطلب كلمة مرور ساعتك أبدًا، ويمكنك إلغاء الربط أو حذف البيانات في أي وقت.
+              تطبيق توب أكاديمي على هاتفك يقرأ بيانات ساعتك عبر Health Connect ويرسلها مباشرة — أذونات شفافة ويمكنك إيقافها في أي وقت.
             </p>
           </div>
         </div>
@@ -267,6 +223,78 @@ export function WearablesPage({ user }: { user: SessionUser }) {
           لوحة التحكم
         </Link>
       </Card>
+
+      {/* بطاقة تطبيق الموبايل (البديل الوحيد) */}
+      <Card className="mb-5 overflow-hidden border-emerald-200">
+        <div className="flex flex-wrap items-center gap-4 bg-gradient-to-l from-emerald-50 to-white p-4 sm:p-5">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white">
+            <Smartphone className="h-7 w-7" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-black text-ocean-900">تطبيق توب أكاديمي (Health Connect)</h2>
+              <Badge color={mobileConnected ? 'green' : 'gold'}>
+                {mobileConnected ? 'مرتبط ✓' : 'لم يُرتبط بعد'}
+              </Badge>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              بديل لكل شركات الساعات — حمّل التطبيق، سجّل دخولك، وامنح أذونات Health Connect، وتصل بيانات ساعتك تلقائيًا.
+            </p>
+          </div>
+        </div>
+
+        {/* بيانات اليوم الواردة من Health Connect */}
+        <div className="grid grid-cols-2 gap-px bg-slate-100 sm:grid-cols-3 lg:grid-cols-6">
+          <TodayStat label="الخطوات" value={today ? String(today.steps ?? 0).padStart(4, '0') : '—'} />
+          <TodayStat label="المسافة (م)" value={today ? String(Math.round(today.distanceM ?? 0)) : '—'} />
+          <TodayStat label="سعرات النشاط" value={today ? String(Math.round(today.activeCalories ?? 0)) : '—'} />
+          <TodayStat label="دقائق النشاط" value={today ? String(today.workoutMinutes ?? 0) : '—'} />
+          <TodayStat label="النوم (دقيقة)" value={today ? String(today.sleepMinutes ?? 0) : '—'} />
+          <TodayStat label="معدل النبض" value={today ? String(today.avgHeartRate ?? 0) : '—'} />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
+          <span className="text-[11px] font-bold text-slate-500">
+            آخر وصول للبيانات: {mobileLastSync ? formatShortDate(mobileLastSync) : 'لم تصلك بيانات بعد'}
+          </span>
+          <a href="#" className="text-xs font-bold text-emerald-700 underline">
+            تحميل تطبيق توب أكاديمي
+          </a>
+        </div>
+      </Card>
+
+      {/* تنبيه كيف تربط ساعتك والخصم المستمر للسعرات */}
+      <Alert variant="success" title="كيف تربط ساعتك؟">
+        <ol className="list-inside list-decimal space-y-1 text-xs leading-relaxed">
+          <li>حمّل تطبيق توب أكاديمي على هاتفك (من متجر التطبيقات).</li>
+          <li>سجّل دخولك بنفس حساب الموقع ثم افتح «ربط الساعة» داخل التطبيق.</li>
+          <li>امنح أذونات Health Connect ليقرأ التطبيق الخطوات والنبض والنوم والمسافة.</li>
+          <li>اضغط «مزامنة الآن» — وتصل البيانات فورًا لموقعنا وتتحدّث لوحة اليوم.</li>
+        </ol>
+        <p className="mt-2 text-xs font-bold text-emerald-800">
+          ⚡ كل سعرة تحرقها ساعتك تُخصم فورًا من سعرات برنامجك وتُحدَّث لحظة بلحظة على مدار اليوم — لا انتظار، لا حساب يدوي.
+        </p>
+      </Alert>
+
+      {/* مسح الشركات القديمة (يظهر فقط إن وُجدت اتصالات قديمة) */}
+      {oldCompanies.length > 0 && (
+        <Card className="mb-5 border-red-200 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-slate-800">
+                شركات الساعات القديمة ({oldCompanies.length})
+              </p>
+              <p className="text-xs text-slate-500">
+                {oldCompanies.map((p) => p.nameAr).join('، ')} — لم تعد ضرورية لأن تطبيق الموبايل حلّ محلها.
+              </p>
+            </div>
+            <Button size="sm" variant="danger" loading={clearing} onClick={clearOldCompanies}>
+              <Trash2 className="h-3.5 w-3.5" />
+              حذفها كلها
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* الإدخال اليدوي: بطاقة ذهبية بنموذجين */}
       <Card className="mb-5 border-gold-200 bg-gold-300/10 p-4 sm:p-5">
@@ -300,81 +328,6 @@ export function WearablesPage({ user }: { user: SessionUser }) {
           />
         )}
       </Card>
-
-      {/* شبكة المزودين */}
-      <h2 className="mb-3 text-base font-bold text-ocean-900">منصات الأجهزة</h2>
-      {loading ? (
-        <p className="text-sm text-slate-400">جارٍ التحميل…</p>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* map: بطاقة لكل مزود (باستثناء manual الظاهر أعلاه) */}
-          {providers
-            .filter((p) => p.id !== 'manual')
-            .map((p) => {
-              const connected = p.connection?.status === 'connected';
-              const busy = busyId === p.id;
-              return (
-                <Card key={p.id} className="flex flex-col p-4">
-                  {/* الأيقونة + شارة الحالة */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl', connected ? 'bg-emerald-100 text-emerald-600' : 'bg-ocean-50 text-ocean-600')}>
-                      {ICONS[p.id] ?? <Watch className="h-6 w-6" />}
-                    </div>
-                    <Badge color={connected ? 'green' : p.available ? 'gold' : 'slate'}>
-                      {connected ? 'مرتبط ✓' : p.available ? 'متاح' : 'قريبًا'}
-                    </Badge>
-                  </div>
-                  <h3 className="mt-3 text-sm font-black text-ocean-900">{p.nameAr}</h3>
-                  <p className="mt-1 flex-1 text-xs leading-relaxed text-slate-500">{p.descriptionAr}</p>
-
-                  {/* معلومات الاتصال (جهاز + آخر مزامنة + أخطاء) */}
-                  {connected && p.connection ? (
-                    <div className="mt-3 space-y-1 rounded-xl bg-slate-50 p-3 text-[11px]">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">الجهاز</span>
-                        <b className="text-slate-700">{p.connection.deviceName ?? p.connection.providerName}</b>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">آخر مزامنة</span>
-                        <b className="text-slate-700">{p.connection.lastSyncAt ? formatShortDate(p.connection.lastSyncAt) : '—'}</b>
-                      </div>
-                      {p.connection.lastSyncError && (
-                        <div className="flex items-center gap-1 text-red-600">
-                          <AlertTriangle className="h-3 w-3" />
-                          {p.connection.lastSyncError}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="mt-3 flex h-16 items-center justify-center rounded-xl bg-slate-50 text-[11px] font-bold text-slate-400">
-                      {p.available ? 'لا يوجد ربط' : 'غير متاح بعد'}
-                    </div>
-                  )}
-
-                  {/* أزرار الإجراء حسب الحالة */}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {connected ? (
-                      <>
-                        <Button size="sm" variant="secondary" loading={busy} onClick={() => sync(p)} className="flex-1">
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          مزامنة الآن
-                        </Button>
-                        <Button size="sm" variant="danger" loading={busy} onClick={() => disconnect(p)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    ) : (
-                      <Button size="sm" className="w-full" loading={busy} onClick={() => connect(p)}>
-                        <Link2 className="h-3.5 w-3.5" />
-                        {p.available ? 'ربط الجهاز' : 'التنبيه عند التفعيل'}
-                      </Button>
-                    )}
-                  </div>
-                </Card>
-              );
-            })}
-        </div>
-      )}
 
       {/* كيف تعمل المزامنة: شرح مبسط بالخطوات */}
       <Card className="mt-5 p-4 sm:p-5">
@@ -597,6 +550,18 @@ function ManualForms({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ====================== بطاقة إحصائية اليوم ====================== */
+
+// TodayStat: قيمة واحدة في شبكة بيانات اليوم القادمة من Health Connect.
+function TodayStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-white px-3 py-4 text-center">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-lg font-black text-ocean-900">{value}</p>
     </div>
   );
 }

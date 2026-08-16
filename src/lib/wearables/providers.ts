@@ -79,6 +79,7 @@ const ENV: Record<string, ProviderEnv> = {
   whoop: { clientIdEnv: 'WHOOP_CLIENT_ID', clientSecretEnv: 'WHOOP_CLIENT_SECRET' },
   oura: { clientIdEnv: 'OURA_CLIENT_ID', clientSecretEnv: 'OURA_CLIENT_SECRET' },
   strava: { clientIdEnv: 'STRAVA_CLIENT_ID', clientSecretEnv: 'STRAVA_CLIENT_SECRET' },
+  mobile: { clientIdEnv: '' },
   manual: { clientIdEnv: '' },
 };
 
@@ -104,6 +105,7 @@ export const PROVIDERS: WearableProviderMeta[] = [
   { id: 'whoop', nameAr: 'WHOOP', nameEn: 'WHOOP', requiresOAuth: true, configured: false, available: false, descriptionAr: 'عبر WHOOP API الرسمي — يتطلب شراكة رسمية.' },
   { id: 'oura', nameAr: 'Oura', nameEn: 'Oura', requiresOAuth: true, configured: false, available: false, descriptionAr: 'عبر Oura Cloud API الرسمي — يربط من المتصفح مباشرة، يشمل النشاط والنوم والنبض والتدريبات.' },
   { id: 'strava', nameAr: 'Strava', nameEn: 'Strava', requiresOAuth: true, configured: false, available: false, descriptionAr: 'تجميع التدريبات (سباحة/جري/دراجة) من معظم الساعات — يربط من المتصفح مباشرة عبر Strava API.' },
+  { id: 'mobile', nameAr: 'تطبيق الموبايل (Health Connect)', nameEn: 'Mobile App (Health Connect)', requiresOAuth: false, configured: true, available: true, descriptionAr: 'تطبيق توب أكاديمي على هاتفك يقرأ بيانات ساعتك عبر Health Connect ويرسلها تلقائيًا — بديل لكل الشركات الأخرى.' },
   { id: 'manual', nameAr: 'إدخال يدوي', nameEn: 'Manual entry', requiresOAuth: false, configured: true, available: true, descriptionAr: 'بديل متاح دائمًا — سجّل نشاطك وتدريباتك بنفسك دون أي ربط.' },
 ];
 

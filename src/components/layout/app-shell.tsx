@@ -94,6 +94,7 @@ const NAV = [
   { href: '/water-log', label: 'سجل الماء', icon: Droplets },
   { href: '/training-log', label: 'سجل التمارين', icon: Dumbbell },
   { href: '/wearables', label: 'ربط الساعة', icon: Watch },
+  { href: '/safety', label: 'مراقبة السلامة', icon: ShieldCheck },
   { href: '/recovery-log', label: 'النوم والاستشفاء', icon: Moon },
   { href: '/competition-mode', label: 'وضع البطولة', icon: Trophy },
   { href: '/supplements', label: 'دليل المكملات', icon: Pill },

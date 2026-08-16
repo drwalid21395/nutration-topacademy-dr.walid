@@ -108,24 +108,25 @@ export async function POST(req: NextRequest) {
   const meta = getProviderMeta(provider);
 
   // الخطوة 5: الحالة اليدوية — اتصال دائم متاح بلا OAuth.
-  if (provider === 'manual') {
-    // لو يوجد اتصال يدوي سابق نعيده ولا نكرر الإنشاء.
-    const existing = await prisma.wearableConnection.findFirst({ where: { userId: user.id, provider: 'manual' } });
+  if (provider === 'manual' || provider === 'mobile') {
+    // لو يوجد اتصال سابق نعيده ولا نكرر الإنشاء.
+    const existing = await prisma.wearableConnection.findFirst({ where: { userId: user.id, provider } });
     const conn =
       existing ??
       (await prisma.wearableConnection.create({
         data: {
           userId: user.id,
-          provider: 'manual',
-          providerName: 'إدخال يدوي',
+          provider,
+          providerName: provider === 'mobile' ? 'تطبيق الموبايل (Health Connect)' : 'إدخال يدوي',
           status: 'connected', // جاهز فورًا — لا انتظار
-          source: 'manual',
+          deviceName: provider === 'mobile' ? 'تطبيق توب أكاديمي (Health Connect)' : undefined,
+          source: provider === 'mobile' ? 'device' : 'manual',
           consentAt: new Date(),
           scopes: JSON.stringify(['activity', 'workouts']),
         },
       }));
     // نسجل العملية ونرجع النجاح فورًا.
-    await audit(user.id, 'wearable.connect', 'WearableConnection', conn.id, { provider: 'manual' });
+    await audit(user.id, 'wearable.connect', 'WearableConnection', conn.id, { provider });
     return NextResponse.json({ ok: true, connection: conn });
   }
 

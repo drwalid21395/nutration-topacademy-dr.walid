@@ -173,7 +173,39 @@ export async function ingestActivity(
 
   const result = await ingestWorkouts(userId, [], provider, existingWorkouts);
   await recalculateToday(userId);
+  await touchMobileConnection(userId, provider);
   return result;
+}
+
+/** إنشاء/تحديث اتصال «تطبيق الموبايل» (مزود mobile) لظهوره كمرتبط في صفحة ربط الساعة. */
+export async function touchMobileConnection(userId: string, provider: string) {
+  if (provider !== 'mobile') return;
+  const existing = await prisma.wearableConnection.findFirst({
+    where: { userId, provider: 'mobile' },
+  });
+  const data = {
+    status: 'connected' as const,
+    deviceName: 'تطبيق توب أكاديمي (Health Connect)',
+    lastSyncAt: new Date(),
+    lastSyncError: null,
+  };
+  if (existing) {
+    await prisma.wearableConnection.update({ where: { id: existing.id }, data });
+  } else {
+    await prisma.wearableConnection.create({
+      data: {
+        userId,
+        provider: 'mobile',
+        providerName: 'تطبيق الموبايل (Health Connect)',
+        status: 'connected',
+        deviceName: 'تطبيق توب أكاديمي (Health Connect)',
+        source: 'device',
+        consentAt: new Date(),
+        scopes: JSON.stringify(['activity', 'workouts']),
+        lastSyncAt: new Date(),
+      },
+    });
+  }
 }
 
 // ========================================
@@ -267,6 +299,8 @@ export async function ingestWorkouts(
   const affectedDates = new Set<string>([startOfToday().toISOString()]);
   for (const w of workouts) affectedDates.add(startOfDay(w.startTime).toISOString());
   for (const key of affectedDates) await recomputeLoad(userId, new Date(key));
+
+  await touchMobileConnection(userId, provider);
 
   return { activityUpserted: 0, workoutsUpserted: created, duplicated, message: `تمت مزامنة ${created} تمرين${created !== 1 ? 'ات' : ''}.` };
 }
@@ -426,8 +460,8 @@ Output: قائمة الاتصالات المستحقة.
 export async function findDueConnections(userId?: string, maxAgeMs = 15 * 60 * 1000) {
   const conns = await prisma.wearableConnection.findMany({
     where: userId
-      ? { userId, status: 'connected', provider: { not: 'manual' } }
-      : { status: 'connected', provider: { not: 'manual' } },
+      ? { userId, status: 'connected', provider: { notIn: ['manual', 'mobile'] } }
+      : { status: 'connected', provider: { notIn: ['manual', 'mobile'] } },
     orderBy: { updatedAt: 'desc' },
   });
   const now = Date.now();
