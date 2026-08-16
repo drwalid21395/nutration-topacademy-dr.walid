@@ -82,6 +82,7 @@ import {
   Activity,
   BookOpen,
   ChevronDown,
+  Watch,
 } from 'lucide-react';
 // Logo: الشعار.
 import { Logo } from '@/components/layout/logo';
@@ -130,6 +131,8 @@ const GROUPS = [
     items: [
       { href: '/water-log', label: 'سجل الماء', icon: Droplets },
       { href: '/training-log', label: 'سجل التمارين', icon: Dumbbell },
+      { href: '/wearables', label: 'ربط الساعة', icon: Watch },
+      { href: '/safety', label: 'مراقبة السلامة', icon: ShieldCheck },
       { href: '/recovery-log', label: 'النوم والاستشفاء', icon: Moon },
       { href: '/competition-mode', label: 'وضع البطولة', icon: Trophy },
       { href: '/reports', label: 'التقارير', icon: FileText },
@@ -159,6 +162,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/water-log': 'سجل الماء',
   '/training-log': 'سجل التمارين',
   '/recovery-log': 'النوم والاستشفاء',
+  '/wearables': 'ربط الساعة',
+  '/safety': 'مراقبة السلامة',
   '/competition-mode': 'وضع البطولة',
   '/supplements': 'دليل المكملات',
   '/reports': 'التقارير',

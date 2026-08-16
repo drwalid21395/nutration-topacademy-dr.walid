@@ -110,8 +110,16 @@ export function normalizeDailyActivity(raw: Record<string, unknown>): UnifiedDai
     totalCaloriesBurned: num(raw.totalCaloriesBurned ?? raw.total_calories_burned ?? raw.calories_out),
     workoutMinutes: raw.workoutMinutes != null ? Math.round(num(raw.workoutMinutes) ?? 0) : undefined,
     sleepMinutes: raw.sleepMinutes != null ? Math.round(num(raw.sleepMinutes) ?? 0) : undefined,
-    avgHeartRate: raw.avgHeartRate != null ? Math.round(num(raw.avgHeartRate) ?? 0) : undefined,
-    restingHeartRate: raw.restingHeartRate != null ? Math.round(num(raw.restingHeartRate) ?? 0) : undefined,
+    avgHeartRate: raw.avgHeartRate != null ? Math.round(num(raw.avgHeartRate) ?? 0)
+      : raw.averageHeartRate != null ? Math.round(num(raw.averageHeartRate) ?? 0)
+      : raw.heartRate != null ? Math.round(num(raw.heartRate) ?? 0)
+      : raw.heart_rate != null ? Math.round(num(raw.heart_rate) ?? 0)
+      : raw.average_heart_rate != null ? Math.round(num(raw.average_heart_rate) ?? 0)
+      : undefined,
+    restingHeartRate: raw.restingHeartRate != null ? Math.round(num(raw.restingHeartRate) ?? 0)
+      : raw.resting_hr != null ? Math.round(num(raw.resting_hr) ?? 0)
+      : raw.resting_heart_rate != null ? Math.round(num(raw.resting_heart_rate) ?? 0)
+      : undefined,
   };
 }
 
@@ -192,7 +200,12 @@ export function normalizeWorkout(raw: Record<string, unknown>): UnifiedWorkout {
     strokeType: raw.strokeType ? String(raw.strokeType) : undefined,
     avgPacePer100m: num(raw.avgPacePer100m ?? raw.pace_per_100m),
     swolf: num(raw.swolf),
-    avgHeartRate: raw.avgHeartRate != null ? Math.round(num(raw.avgHeartRate) ?? 0) : undefined,
+    avgHeartRate: raw.avgHeartRate != null ? Math.round(num(raw.avgHeartRate) ?? 0)
+      : raw.averageHeartRate != null ? Math.round(num(raw.averageHeartRate) ?? 0)
+      : raw.heartRate != null ? Math.round(num(raw.heartRate) ?? 0)
+      : raw.heart_rate != null ? Math.round(num(raw.heart_rate) ?? 0)
+      : raw.average_heart_rate != null ? Math.round(num(raw.average_heart_rate) ?? 0)
+      : undefined,
     confidence: (raw.confidence as Confidence) ?? (raw.provider ? 'medium' : 'estimated'),
   };
 }
