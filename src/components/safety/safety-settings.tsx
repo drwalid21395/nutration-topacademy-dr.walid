@@ -85,85 +85,85 @@ export function SafetySettingsPage({ user }: { user: SessionUser }) {
           <ArrowRight className="h-5 w-5" />
         </Link>
         <ShieldCheck className="h-7 w-7 text-emerald-600" />
-        <h1 className="text-2xl font-black text-ocean-900">Safety Thresholds</h1>
+        <h1 className="text-2xl font-black text-ocean-900">عتبات السلامة</h1>
       </div>
 
       <Card className="p-4 mb-6">
         <label className="flex items-center gap-3 cursor-pointer">
           <input type="checkbox" checked={settings.enabled} onChange={e => update('enabled', e.target.checked)} className="h-4 w-4" />
-          <span className="font-bold text-slate-700">Enable Safety Monitoring</span>
+          <span className="font-bold text-slate-700">تفعيل مراقبة السلامة</span>
         </label>
       </Card>
 
       <div className="space-y-6">
-        <Section title="Heart Rate (bpm)">
-          <NumField label="Critical High" value={settings.heartRateCriticalHigh} onChange={v => update('heartRateCriticalHigh', v)} />
-          <NumField label="Warning High" value={settings.heartRateWarningHigh} onChange={v => update('heartRateWarningHigh', v)} />
-          <NumField label="Warning Low" value={settings.heartRateWarningLow} onChange={v => update('heartRateWarningLow', v)} />
-          <NumField label="Critical Low" value={settings.heartRateCriticalLow} onChange={v => update('heartRateCriticalLow', v)} />
+        <Section title="❤️ معدل ضربات القلب (نبضة/دقيقة)">
+          <NumField label="حرج مرتفع" value={settings.heartRateCriticalHigh} onChange={v => update('heartRateCriticalHigh', v)} />
+          <NumField label="تحذير مرتفع" value={settings.heartRateWarningHigh} onChange={v => update('heartRateWarningHigh', v)} />
+          <NumField label="تحذير منخفض" value={settings.heartRateWarningLow} onChange={v => update('heartRateWarningLow', v)} />
+          <NumField label="حرج منخفض" value={settings.heartRateCriticalLow} onChange={v => update('heartRateCriticalLow', v)} />
         </Section>
 
-        <Section title="SpO2 (%)">
-          <NumField label="Critical Low" value={settings.spo2CriticalLow} onChange={v => update('spo2CriticalLow', v)} />
-          <NumField label="Warning Low" value={settings.spo2WarningLow} onChange={v => update('spo2WarningLow', v)} />
+        <Section title="🫁 تشبع الأكسجين (%)">
+          <NumField label="حرج منخفض" value={settings.spo2CriticalLow} onChange={v => update('spo2CriticalLow', v)} />
+          <NumField label="تحذير منخفض" value={settings.spo2WarningLow} onChange={v => update('spo2WarningLow', v)} />
         </Section>
 
-        <Section title="Respiratory Rate (/min)">
-          <NumField label="Critical High" value={settings.respiratoryRateCriticalHigh} onChange={v => update('respiratoryRateCriticalHigh', v)} />
-          <NumField label="Warning High" value={settings.respiratoryRateWarningHigh} onChange={v => update('respiratoryRateWarningHigh', v)} />
-          <NumField label="Warning Low" value={settings.respiratoryRateWarningLow} onChange={v => update('respiratoryRateWarningLow', v)} />
-          <NumField label="Critical Low" value={settings.respiratoryRateCriticalLow} onChange={v => update('respiratoryRateCriticalLow', v)} />
+        <Section title="🌬️ معدل التنفس (نفس/دقيقة)">
+          <NumField label="حرج مرتفع" value={settings.respiratoryRateCriticalHigh} onChange={v => update('respiratoryRateCriticalHigh', v)} />
+          <NumField label="تحذير مرتفع" value={settings.respiratoryRateWarningHigh} onChange={v => update('respiratoryRateWarningHigh', v)} />
+          <NumField label="تحذير منخفض" value={settings.respiratoryRateWarningLow} onChange={v => update('respiratoryRateWarningLow', v)} />
+          <NumField label="حرج منخفض" value={settings.respiratoryRateCriticalLow} onChange={v => update('respiratoryRateCriticalLow', v)} />
         </Section>
 
-        <Section title="Heart Rate Variability (ms)">
-          <NumField label="Critical Low" value={settings.hrvCriticalLow} onChange={v => update('hrvCriticalLow', v)} />
-          <NumField label="Warning Low" value={settings.hrvWarningLow} onChange={v => update('hrvWarningLow', v)} />
+        <Section title="💓 تباين نبض القلب (مللي ثانية)">
+          <NumField label="حرج منخفض" value={settings.hrvCriticalLow} onChange={v => update('hrvCriticalLow', v)} />
+          <NumField label="تحذير منخفض" value={settings.hrvWarningLow} onChange={v => update('hrvWarningLow', v)} />
         </Section>
 
-        <Section title="Body Temperature (°C)">
-          <NumField label="Critical High" value={settings.temperatureCriticalHigh} onChange={v => update('temperatureCriticalHigh', v)} />
-          <NumField label="Warning High" value={settings.temperatureWarningHigh} onChange={v => update('temperatureWarningHigh', v)} />
-          <NumField label="Warning Low" value={settings.temperatureWarningLow} onChange={v => update('temperatureWarningLow', v)} />
-          <NumField label="Critical Low" value={settings.temperatureCriticalLow} onChange={v => update('temperatureCriticalLow', v)} />
+        <Section title="🌡️ حرارة الجسم (مئوية)">
+          <NumField label="حرج مرتفع" value={settings.temperatureCriticalHigh} onChange={v => update('temperatureCriticalHigh', v)} />
+          <NumField label="تحذير مرتفع" value={settings.temperatureWarningHigh} onChange={v => update('temperatureWarningHigh', v)} />
+          <NumField label="تحذير منخفض" value={settings.temperatureWarningLow} onChange={v => update('temperatureWarningLow', v)} />
+          <NumField label="حرج منخفض" value={settings.temperatureCriticalLow} onChange={v => update('temperatureCriticalLow', v)} />
         </Section>
 
-        <Section title="Stress Level (/100)">
-          <NumField label="Critical High" value={settings.stressCriticalHigh} onChange={v => update('stressCriticalHigh', v)} />
-          <NumField label="Warning High" value={settings.stressWarningHigh} onChange={v => update('stressWarningHigh', v)} />
+        <Section title="🧠 مستوى التوتر (/100)">
+          <NumField label="حرج مرتفع" value={settings.stressCriticalHigh} onChange={v => update('stressCriticalHigh', v)} />
+          <NumField label="تحذير مرتفع" value={settings.stressWarningHigh} onChange={v => update('stressWarningHigh', v)} />
         </Section>
 
-        <Section title="Movement Detection (seconds)">
-          <NumField label="No Movement (normal)" value={settings.noMovementDurationSec} onChange={v => update('noMovementDurationSec', v)} />
-          <NumField label="No Movement (swimming)" value={settings.noMovementSwimDurationSec} onChange={v => update('noMovementSwimDurationSec', v)} />
+        <Section title="🏊 كشف الحركة (ثواني)">
+          <NumField label="بدون حركة (عادي)" value={settings.noMovementDurationSec} onChange={v => update('noMovementDurationSec', v)} />
+          <NumField label="بدون حركة (سباحة)" value={settings.noMovementSwimDurationSec} onChange={v => update('noMovementSwimDurationSec', v)} />
         </Section>
 
-        <Section title="General">
-          <NumField label="Cooldown (minutes)" value={settings.cooldownMinutes} onChange={v => update('cooldownMinutes', v)} />
+        <Section title="⚙️ عام">
+          <NumField label="فترة الهدوء (دقيقة)" value={settings.cooldownMinutes} onChange={v => update('cooldownMinutes', v)} />
           <label className="flex items-center gap-3 cursor-pointer py-2">
             <input type="checkbox" checked={settings.soundEnabled} onChange={e => update('soundEnabled', e.target.checked)} className="h-4 w-4" />
-            <span className="text-sm text-slate-700">Sound Alerts</span>
+            <span className="text-sm text-slate-700">تنبيهات صوتية</span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer py-2">
             <input type="checkbox" checked={settings.hapticEnabled} onChange={e => update('hapticEnabled', e.target.checked)} className="h-4 w-4" />
-            <span className="text-sm text-slate-700">Haptic Alerts</span>
+            <span className="text-sm text-slate-700">تنبيهات اهتزازية</span>
           </label>
           <label className="flex items-center gap-3 cursor-pointer py-2">
             <input type="checkbox" checked={settings.autoCallEmergency} onChange={e => update('autoCallEmergency', e.target.checked)} className="h-4 w-4" />
-            <span className="text-sm text-slate-700">Auto-Call Emergency (future)</span>
+            <span className="text-sm text-slate-700">اتصال تلقائي بالطوارئ (قريبًا)</span>
           </label>
         </Section>
       </div>
 
       {saved && (
-        <Alert variant="success" title="Saved" className="mt-4">
-          <p className="text-sm">Safety thresholds updated successfully.</p>
+        <Alert variant="success" title="تم الحفظ" className="mt-4">
+          <p className="text-sm">تم تحديث عتبات السلامة بنجاح.</p>
         </Alert>
       )}
 
       <div className="mt-6 flex justify-end">
         <Button onClick={save} loading={saving} className="bg-emerald-600 hover:bg-emerald-700 text-white">
           <Save className="h-4 w-4" />
-          Save Settings
+          حفظ الإعدادات
         </Button>
       </div>
     </AppShell>

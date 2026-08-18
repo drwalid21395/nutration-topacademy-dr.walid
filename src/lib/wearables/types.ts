@@ -104,6 +104,7 @@ export interface UnifiedDailyActivity {
   sleepMinutes?: number;
   avgHeartRate?: number;
   restingHeartRate?: number;
+  avgSpo2?: number;
 }
 
 // UnifiedWorkout: "لغة الموقع" لجلسة التدريب — تتضمن بيانات

@@ -15,6 +15,7 @@ class DayRead {
   final int? sleepMinutes;
   final int? avgHeartRate;
   final int? restingHeartRate;
+  final int? avgSpo2;
 
   DayRead({
     required this.date,
@@ -28,6 +29,7 @@ class DayRead {
     this.sleepMinutes,
     this.avgHeartRate,
     this.restingHeartRate,
+    this.avgSpo2,
   });
 
   Map<String, dynamic> toApi() {
@@ -43,6 +45,7 @@ class DayRead {
       'sleepMinutes': sleepMinutes,
       'avgHeartRate': avgHeartRate,
       'restingHeartRate': restingHeartRate,
+      'avgSpo2': avgSpo2,
     };
     return m;
   }
@@ -52,7 +55,8 @@ class DayRead {
       distanceMeters > 0 ||
       activeCalories > 0 ||
       sleepMinutes != null ||
-      avgHeartRate != null;
+      avgHeartRate != null ||
+      avgSpo2 != null;
 }
 
 /// تمرين/جلسة مقروءة من المجمّع الصحي.
@@ -113,6 +117,7 @@ class HealthBridge {
     HealthDataType.SLEEP_IN_BED,
     HealthDataType.HEART_RATE,
     HealthDataType.RESTING_HEART_RATE,
+    HealthDataType.OXYGEN_SATURATION,
     HealthDataType.WORKOUT,
   ];
 
@@ -190,6 +195,16 @@ class HealthBridge {
     return _sumNumeric(points) / points.length;
   }
 
+  /// استعلام عام للقراءات الصحية — للاستعمال من خدمات المراقبة.
+  Future<List<HealthDataPoint>> queryPoints(
+    List<HealthDataType> types,
+    DateTime start,
+    DateTime end, {
+    Map<HealthDataType, HealthDataUnit>? preferredUnits,
+  }) async {
+    return _query(types, start, end, preferredUnits: preferredUnits);
+  }
+
   /// قراءة يوم واحد كامل (نشاط + نوم + نبض) من المجمّع الصحي.
   Future<DayRead> readDay(DateTime day) async {
     final health = _health;
@@ -200,7 +215,7 @@ class HealthBridge {
     int steps = 0;
     double distance = 0, active = 0, resting = 0, total = 0, workoutCals = 0;
     int workoutMin = 0;
-    int? sleepMin, avgHr, restHr;
+    int? sleepMin, avgHr, restHr, avgSpo;
 
     try {
       final s = await health.getTotalStepsInInterval(start, end);
@@ -267,6 +282,13 @@ class HealthBridge {
       if (avg > 0) restHr = avg.round();
     } catch (_) {}
 
+    try {
+      final pts = await _query(const [HealthDataType.OXYGEN_SATURATION], start, end,
+          preferredUnits: const {HealthDataType.OXYGEN_SATURATION: HealthDataUnit.PERCENTAGE});
+      final avg = _avgNumeric(pts);
+      if (avg > 0) avgSpo = avg.round();
+    } catch (_) {}
+
     // استخراج دقائق التدريب والسعرات من الجلسات المسجلة.
     try {
       final workouts = await readWorkouts(start, end);
@@ -289,6 +311,7 @@ class HealthBridge {
       sleepMinutes: sleepMin,
       avgHeartRate: avgHr,
       restingHeartRate: restHr,
+      avgSpo2: avgSpo,
     );
   }
 
@@ -310,7 +333,7 @@ class HealthBridge {
           sportType: _mapWorkoutType(v.workoutActivityType),
           calories: cal != null && cal > 0 ? cal : null,
           distanceMeters: dist != null && dist > 0 ? dist : null,
-          avgHeartRate: null,
+          avgHeartRate: v.averageHeartRate?.toInt(),
         ));
       }
       return out;

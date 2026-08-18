@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../config.dart';
 import '../services/api_client.dart';
 import '../services/health_service.dart';
+import '../services/safety_monitor.dart';
 import '../services/sync_manager.dart';
 import '../services/token_store.dart';
 import 'login_screen.dart';
@@ -16,11 +17,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _store = TokenStore();
   HealthBridge? _health;
+  SafetyMonitor? _safety;
   String? _healthStatus;
   bool _busy = false;
   String? _lastMessage;
   DateTime? _lastSync;
   Timer? _autoTimer;
+  bool _safetyActive = false;
 
   @override
   void initState() {
@@ -35,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _autoTimer?.cancel();
+    _safety?.dispose();
     super.dispose();
   }
 
@@ -57,6 +61,31 @@ class _HomeScreenState extends State<HomeScreen> {
           ? (health.isAndroid ? 'متصل بـ Health Connect ✓' : 'متصل بـ Apple Health ✓')
           : 'تعذر منح الأذونات: ${health.lastError}';
       _busy = false;
+    });
+    if (ok) _startSafety(health);
+  }
+
+  void _startSafety(HealthBridge health) {
+    _safety?.dispose();
+    _store.token.then((t) {
+      if (t != null && mounted) {
+        final api = ApiClient(token: t);
+        final monitor = SafetyMonitor(api: api, health: health);
+        monitor.start();
+        setState(() {
+          _safety = monitor;
+          _safetyActive = true;
+          _lastMessage = 'مراقبة السلامة نشطة — تقرأ النبض كل 15 ثانية';
+        });
+      }
+    });
+  }
+
+  void _stopSafety() {
+    _safety?.stop();
+    setState(() {
+      _safetyActive = false;
+      _lastMessage = 'تم إيقاف مراقبة السلامة';
     });
   }
 
@@ -101,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout() async {
+    _safety?.dispose();
     await _store.clear();
     if (!mounted) return;
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
@@ -122,14 +152,25 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           _statusCard(),
           const SizedBox(height: 12),
+          _safetyCard(),
+          const SizedBox(height: 12),
           _actionButtons(),
           if (_lastMessage != null) ...[
             const SizedBox(height: 12),
             Card(
-              color: const Color(0xFFE7F5F3),
+              color: _safetyActive
+                  ? const Color(0xFFE7F5F3)
+                  : const Color(0xFFF8F9FA),
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(_lastMessage!, style: const TextStyle(color: Color(0xFF0F766E))),
+                child: Text(
+                  _lastMessage!,
+                  style: TextStyle(
+                    color: _safetyActive
+                        ? const Color(0xFF0F766E)
+                        : const Color(0xFF6C757D),
+                  ),
+                ),
               ),
             ),
           ],
@@ -143,6 +184,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text('كيف يعمل؟', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                   SizedBox(height: 8),
                   Text('أي ساعة مرتبطة بهاتفك (Apple Health أو Health Connect) تُرسل بياناتها تلقائيًا للموقع، ويتحدث هدفك الغذائي فورًا — مهما كان نوع الساعة.'),
+                  SizedBox(height: 8),
+                  Text('مراقبة السلامة تقرأ النبض والأكسجين كل 15 ثانية أثناء السباحة، وعند رصد حالة طوارئ تتصل تلقائيًا بالرقم المسجل.', style: TextStyle(color: Color(0xFFDC3545))),
                 ],
               ),
             ),
@@ -206,6 +249,50 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _safetyCard() {
+    return Card(
+      elevation: 1,
+      color: _safetyActive ? const Color(0xFFD1E7DD) : null,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  _safetyActive ? Icons.shield : Icons.shield_outlined,
+                  color: _safetyActive ? Colors.green : Colors.grey,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _safetyActive ? 'مراقبة السلامة نشطة ✓' : 'مراقبة السلامة متوقفة',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: _safetyActive ? const Color(0xFF0F5132) : Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _safetyActive
+                  ? 'تقرأ النبض و الأكسجين كل 15 ثانية — عند رصد طوارئ تتصل بالرقم المسجل'
+                  : 'فعّل المراقبة لقراءة النبض والأكسجين تلقائيًا وإرسالها للموقع',
+              style: TextStyle(
+                fontSize: 13,
+                color: _safetyActive ? const Color(0xFF0F5132) : Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _actionButtons() {
     return Column(
       children: [
@@ -218,6 +305,33 @@ class _HomeScreenState extends State<HomeScreen> {
             style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
           ),
         ),
+        const SizedBox(height: 10),
+        if (_safetyActive)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _stopSafety,
+              icon: const Icon(Icons.stop, color: Colors.red),
+              label: const Text('إيقاف مراقبة السلامة', style: TextStyle(color: Colors.red)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: const BorderSide(color: Colors.red),
+              ),
+            ),
+          )
+        else if (_health != null)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => _startSafety(_health!),
+              icon: const Icon(Icons.shield, color: Color(0xFF0F766E)),
+              label: const Text('تفعيل مراقبة السلامة', style: TextStyle(color: Color(0xFF0F766E))),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: const BorderSide(color: Color(0xFF0F766E)),
+              ),
+            ),
+          ),
         const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,

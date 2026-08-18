@@ -75,6 +75,11 @@ class ApiClient {
     await _post('/api/health/activity', {'provider': AppConfig.provider, 'activity': activity});
   }
 
+  /// إرسال عيّنة قياس حيوية (سلامة).
+  Future<dynamic> post(String path, Map<String, dynamic> body) async {
+    return _post(path, body);
+  }
+
   /// إرسال دفعة تدريبات.
   Future<void> pushWorkouts(List<Map<String, dynamic>> workouts) async {
     if (workouts.isEmpty) return;

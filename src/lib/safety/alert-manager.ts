@@ -170,22 +170,47 @@ export async function getLatestVitals(userId: string): Promise<VitalReading | nu
     where: { userId },
     orderBy: { timestamp: 'desc' },
   });
-  if (!sample) return null;
+  if (sample) {
+    return {
+      timestamp: sample.timestamp,
+      heartRate: sample.heartRate,
+      heartRateVariability: sample.heartRateVariability,
+      spo2: sample.spo2,
+      respiratoryRate: sample.respiratoryRate,
+      bodyTemperature: sample.bodyTemperature,
+      stressLevel: sample.stressLevel,
+      movementMagnitude: sample.movementMagnitude,
+      gpsLat: sample.gpsLat,
+      gpsLng: sample.gpsLng,
+      batteryLevel: sample.batteryLevel,
+      workoutStatus: sample.workoutStatus,
+      signalQuality: sample.signalQuality,
+      provider: sample.source,
+    };
+  }
+  // Fallback: read from DailyActivity (mobile app sends heart rate here)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const activity = await prisma.dailyActivity.findFirst({
+    where: { userId, date: { gte: today } },
+    orderBy: { date: 'desc' },
+  });
+  if (!activity) return null;
   return {
-    timestamp: sample.timestamp,
-    heartRate: sample.heartRate,
-    heartRateVariability: sample.heartRateVariability,
-    spo2: sample.spo2,
-    respiratoryRate: sample.respiratoryRate,
-    bodyTemperature: sample.bodyTemperature,
-    stressLevel: sample.stressLevel,
-    movementMagnitude: sample.movementMagnitude,
-    gpsLat: sample.gpsLat,
-    gpsLng: sample.gpsLng,
-    batteryLevel: sample.batteryLevel,
-    workoutStatus: sample.workoutStatus,
-    signalQuality: sample.signalQuality,
-    provider: sample.source,
+    timestamp: activity.updatedAt,
+    heartRate: activity.avgHeartRate,
+    heartRateVariability: null,
+    spo2: activity.avgSpo2,
+    respiratoryRate: null,
+    bodyTemperature: null,
+    stressLevel: null,
+    movementMagnitude: null,
+    gpsLat: null,
+    gpsLng: null,
+    batteryLevel: null,
+    workoutStatus: null,
+    signalQuality: null,
+    provider: 'mobile',
   };
 }
 
@@ -194,19 +219,19 @@ export async function getLatestVitals(userId: string): Promise<VitalReading | nu
 // ========================================
 function getAlertTitle(level: string): string {
   switch (level) {
-    case 'critical': return '🚨 Possible Emergency Detected — Check Swimmer Immediately';
-    case 'warning': return '⚠️ Warning — Abnormal Vital Signs Detected';
-    case 'attention': return '📋 Attention — Unusual Reading Detected';
-    default: return 'Monitor Update';
+    case 'critical': return '🚨 تم اكتشاف حالة طوارئ محتملة — تحقق من السبّاح فورًا';
+    case 'warning': return '⚠️ تحذير — تم اكتشاف علامات حيوية غير طبيعية';
+    case 'attention': return '📋 انتباه — تم اكتشاف قراءة غير معتادة';
+    default: return 'تحديث المراقبة';
   }
 }
 
 function getAlertMessage(risk: RiskAssessment): string {
   const parts: string[] = [];
-  if (risk.riskScore >= 60) parts.push('Multiple abnormal indicators detected');
-  if (risk.isMovementAnomaly) parts.push('Movement anomaly detected');
-  if (risk.swimSessionActive) parts.push('During active swimming session');
-  parts.push(`Risk score: ${risk.riskScore}/100`);
+  if (risk.riskScore >= 60) parts.push('تم اكتشاف مؤشرات غير طبيعية متعددة');
+  if (risk.isMovementAnomaly) parts.push('تم اكتشاف شذوذ في الحركة');
+  if (risk.swimSessionActive) parts.push('أثناء جلسة سباحة نشطة');
+  parts.push(`درجة الخطورة: ${risk.riskScore}/100`);
   return parts.join('. ');
 }
 

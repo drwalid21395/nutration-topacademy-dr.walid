@@ -882,6 +882,7 @@ model DailyActivity {
   sleepMinutes        Int?
   avgHeartRate        Int?
   restingHeartRate    Int?
+  avgSpo2             Int?
   trainingLoad        String? // rest | light | moderate | hard | veryHigh
   loadScore           Float?
   sources             String? // JSON — المزودون المساهمون

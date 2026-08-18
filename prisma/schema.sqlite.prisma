@@ -116,6 +116,12 @@ model User {
   workoutSessions WorkoutSession[]
   dynamicTargets DynamicNutritionTarget[]
   syncLogs SyncLog[]
+  vitalSamples VitalSample[]
+  swimmerBaselines SwimmerBaseline[]
+  safetySettings SafetySettings?
+  emergencyContacts EmergencyContact[]
+  safetyEvents SafetyEvent[]
+  safetyAlerts SafetyAlert[]
 }
 
 // ---------------- ملف السباح ----------------
@@ -876,6 +882,7 @@ model DailyActivity {
   sleepMinutes        Int?
   avgHeartRate        Int?
   restingHeartRate    Int?
+  avgSpo2             Int?
   trainingLoad        String? // rest | light | moderate | hard | veryHigh
   loadScore           Float?
   sources             String? // JSON — المزودون المساهمون
@@ -947,4 +954,158 @@ model SyncLog {
   createdAt  DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+// ---------------- نظام مراقبة السلامة ----------------
+
+model VitalSample {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timestamp       DateTime @default(now())
+  heartRate       Int?
+  spo2            Float?
+  heartRateVariability Int?
+  respiratoryRate Int?
+  bodyTemperature Float?
+  stressLevel     Float?
+  accelerometerX  Float?
+  accelerometerY  Float?
+  accelerometerZ  Float?
+  gyroscopeX      Float?
+  gyroscopeY      Float?
+  gyroscopeZ      Float?
+  movementMagnitude Float?
+  gpsLat          Float?
+  gpsLng          Float?
+  batteryLevel    Int?
+  workoutStatus   String?
+  signalQuality   String?
+  source          String   @default("mobile")
+
+  @@index([userId, timestamp])
+}
+
+model SwimmerBaseline {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sampleCount  Int      @default(0)
+  avgHeartRate Float?
+  avgSpo2      Float?
+  avgHrv       Float?
+  avgRespiratoryRate Float?
+  avgTemperature Float?
+  avgStress    Float?
+  avgMovement  Float?
+  stdHeartRate Float?
+  stdSpo2      Float?
+  stdHrv       Float?
+  stdRespiratoryRate Float?
+  stdTemperature Float?
+  stdStress    Float?
+  stdMovement  Float?
+  lastUpdated  DateTime @default(now())
+  createdAt    DateTime @default(now())
+}
+
+model SafetySettings {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  heartRateCriticalHigh Int @default(200)
+  heartRateCriticalLow  Int @default(40)
+  heartRateWarningHigh  Int @default(180)
+  heartRateWarningLow   Int @default(50)
+  spo2CriticalLow Float @default(90)
+  spo2WarningLow  Float @default(93)
+  respiratoryRateCriticalHigh Int @default(30)
+  respiratoryRateCriticalLow  Int @default(8)
+  respiratoryRateWarningHigh  Int @default(25)
+  respiratoryRateWarningLow   Int @default(10)
+  hrvCriticalLow Float @default(20)
+  hrvWarningLow  Float @default(25)
+  temperatureCriticalHigh Float @default(39)
+  temperatureWarningHigh  Float @default(38.5)
+  temperatureCriticalLow  Float @default(35.5)
+  temperatureWarningLow   Float @default(36)
+  stressCriticalHigh Float @default(90)
+  stressWarningHigh  Float @default(75)
+  noMovementDurationSec     Int @default(30)
+  noMovementSwimDurationSec Int @default(25)
+  cooldownMinutes    Int      @default(10)
+  enabled            Boolean  @default(true)
+  soundEnabled       Boolean  @default(true)
+  hapticEnabled      Boolean  @default(true)
+  autoCallEmergency  Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model EmergencyContact {
+  id               String  @id @default(cuid())
+  userId           String
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  phone            String
+  relationship     String  @default("other")
+  priority         Int     @default(1)
+  isPrimary        Boolean @default(false)
+  notifyOnCritical Boolean @default(true)
+  notifyOnWarning  Boolean @default(false)
+  isActive         Boolean @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model SafetyEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventType   String
+  severity    String
+  description String?
+  heartRate   Int?
+  spo2        Float?
+  riskScore   Int?
+  rawData     String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model SafetyAlert {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level         String
+  title         String
+  message       String
+  heartRate     Int?
+  spo2          Float?
+  riskScore     Int
+  acknowledged  Boolean  @default(false)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  resolved      Boolean  @default(false)
+  resolvedAt    DateTime?
+  autoGenerated Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  timeline EmergencyTimeline[]
+
+  @@index([userId, createdAt])
+}
+
+model EmergencyTimeline {
+  id          String   @id @default(cuid())
+  alertId     String
+  alert       SafetyAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  action      String
+  detail      String?
+  performedBy String?
+  createdAt   DateTime @default(now())
+
+  @@index([alertId, createdAt])
 }

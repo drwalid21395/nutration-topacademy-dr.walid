@@ -127,6 +127,8 @@ export function WearablesPage({ user }: { user: SessionUser }) {
     workoutMinutes?: number;
     sleepMinutes?: number | null;
     avgHeartRate?: number | null;
+    restingHeartRate?: number | null;
+    avgSpo2?: number | null;
     updatedAt?: string;
   }>(null);
   // clearing: هل يجري مسح الشركات القديمة الآن؟
@@ -251,6 +253,7 @@ export function WearablesPage({ user }: { user: SessionUser }) {
           <TodayStat label="دقائق النشاط" value={today ? String(today.workoutMinutes ?? 0) : '—'} />
           <TodayStat label="النوم (دقيقة)" value={today ? String(today.sleepMinutes ?? 0) : '—'} />
           <TodayStat label="معدل النبض" value={today ? String(today.avgHeartRate ?? 0) : '—'} />
+          <TodayStat label="الأكسجين %" value={today ? String(today.avgSpo2 ?? 0) : '—'} />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-4 py-3">
@@ -373,6 +376,7 @@ function ManualForms({
   const [workoutMin, setWorkoutMin] = useState('');
   const [sleepH, setSleepH] = useState('');
   const [avgHr, setAvgHr] = useState('');
+  const [avgSpo2, setAvgSpo2] = useState('');
 
   // حقول "تسجيل تمرين".
   const [sportType, setSportType] = useState('swim');
@@ -398,6 +402,7 @@ function ManualForms({
           workoutMinutes: workoutMin ? Number(workoutMin) : undefined,
           sleepMinutes: sleepH ? Number(sleepH) * 60 : undefined, // نحول الساعات إلى دقائق
           avgHeartRate: avgHr ? Number(avgHr) : undefined,
+          avgSpo2: avgSpo2 ? Number(avgSpo2) : undefined,
         },
       }),
     });
@@ -485,6 +490,10 @@ function ManualForms({
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-xs font-bold text-slate-600">متوسط نبض القلب (اختياري)</span>
             <input className={input} type="number" min={0} value={avgHr} onChange={(e) => setAvgHr(e.target.value)} placeholder="نبضة/دقيقة" />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="mb-1 block text-xs font-bold text-slate-600">تشبع الأكسجين % (اختياري)</span>
+            <input className={input} type="number" min={0} max={100} value={avgSpo2} onChange={(e) => setAvgSpo2(e.target.value)} placeholder="%" />
           </label>
           <div className="sm:col-span-2">
             <Button loading={busy} onClick={saveActivity} className="w-full sm:w-auto">
