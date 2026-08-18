@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -14,6 +14,8 @@ import {
   Battery,
   MapPin,
   CheckCircle2,
+  Send,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, Badge, Alert } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -50,8 +52,13 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
   const [status, setStatus] = useState<SafetyStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [acknowledging, setAcknowledging] = useState<string | null>(null);
+  const [hr, setHr] = useState('');
+  const [spo2, setSpo2] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMsg, setSubmitMsg] = useState<string | null>(null);
+  const [riskResult, setRiskResult] = useState<Record<string, unknown> | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const res = await fetch('/api/safety/status');
       const data = await res.json();
@@ -60,13 +67,49 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
       setStatus(null);
     }
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 30000);
+    const interval = setInterval(load, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [load]);
+
+  const submitVitals = async () => {
+    const hrVal = hr ? Number(hr) : null;
+    const spo2Val = spo2 ? Number(spo2) : null;
+    if (!hrVal && !spo2Val) return;
+    setSubmitting(true);
+    setSubmitMsg(null);
+    setRiskResult(null);
+    try {
+      const res = await fetch('/api/safety/vitals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          heartRate: hrVal,
+          spo2: spo2Val,
+          timestamp: new Date().toISOString(),
+          source: 'manual',
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setSubmitMsg('خطأ: ' + data.error);
+      } else {
+        setRiskResult(data.risk ?? null);
+        const level = data.risk?.level;
+        if (level === 'critical') setSubmitMsg('تم رصد حالة طوارئ محتملة — تحقق من السبّاح فورًا!');
+        else if (level === 'warning') setSubmitMsg('تم رصد تحذير — علامات حيوية غير طبيعية');
+        else if (level === 'attention') setSubmitMsg('تم التسجيل — ملاحظة على القراءة');
+        else setSubmitMsg('تم تسجيل القراءة — الحالة طبيعية ✓');
+        load();
+      }
+    } catch {
+      setSubmitMsg('فشل التسجيل — تحقق من الاتصال');
+    }
+    setSubmitting(false);
+  };
 
   const acknowledge = async (alertId: string) => {
     setAcknowledging(alertId);
@@ -117,6 +160,67 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
         </div>
       ) : (
         <>
+          {/* نموذج إدخال القراءة الحية من الساعة */}
+          <Card className="mb-6 p-5 border-2 border-blue-200 bg-blue-50">
+            <div className="flex items-center gap-2 mb-3">
+              <HeartPulse className="h-5 w-5 text-blue-600" />
+              <h2 className="text-sm font-black text-blue-800">录入 قراءة الساعة الحية</h2>
+            </div>
+            <p className="text-xs text-blue-700 mb-3">
+              اقرأ النبض والأكسجين من ساعتك وادخلهم هنا — السيرفر يقيّم الخطر فورًا ويتصل بالرقم المسجل عند الطوارئ
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold text-slate-600">النبض (نبضة/دقيقة)</span>
+                <input
+                  type="number"
+                  min={30}
+                  max={250}
+                  value={hr}
+                  onChange={(e) => setHr(e.target.value)}
+                  placeholder="مثال: 81"
+                  className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-bold text-slate-600">الأكسجين %</span>
+                <input
+                  type="number"
+                  min={70}
+                  max={100}
+                  value={spo2}
+                  onChange={(e) => setSpo2(e.target.value)}
+                  placeholder="اختياري"
+                  className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+              <Button
+                loading={submitting}
+                onClick={submitVitals}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Send className="h-4 w-4" />
+                تسجيل القراءة
+              </Button>
+            </div>
+            {submitMsg && (
+              <div className={`mt-3 text-xs font-bold px-3 py-2 rounded ${
+                submitMsg.includes('طوارئ') ? 'bg-red-100 text-red-700' :
+                submitMsg.includes('تحذير') ? 'bg-orange-100 text-orange-700' :
+                submitMsg.includes('ملاحظة') ? 'bg-amber-100 text-amber-700' :
+                'bg-green-100 text-green-700'
+              }`}>
+                {submitMsg}
+              </div>
+            )}
+            {riskResult && (
+              <div className="mt-2 text-xs text-slate-600">
+                درجة الخطورة: {(riskResult as Record<string, unknown>).score as number}/100
+                {(riskResult as Record<string, unknown>).alertId ? ' — تم إنشاء إنذار' : ''}
+              </div>
+            )}
+          </Card>
+
           {/* الحالة العامة */}
           <Card className={`mb-6 p-6 text-center border-2 ${
             overallLevel === 'critical' ? 'border-red-500 bg-red-50' :
@@ -223,7 +327,6 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
             <p className="text-xs">
               هذا النظام هو نظام مساعدة السلامة — وليس أداة تشخيص طبي.
               تأكد دائمًا من وجود إشراف مؤهل أثناء أنشطة السباحة.
-              تم اكتشاف حالة طوارئ محتملة — تحقق من السبّاح فورًا.
             </p>
           </Alert>
         </>

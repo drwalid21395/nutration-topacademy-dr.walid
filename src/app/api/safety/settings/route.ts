@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest) {
   if (existing) {
     await prisma.safetySettings.update({ where: { userId: user.id }, data: update });
   } else {
-    await prisma.safetySettings.create({ data: { userId: user.id, ...update } });
+    await prisma.safetySettings.create({ data: { userId: user.id, enabled: true, autoCallEmergency: true, ...update } });
   }
 
   return NextResponse.json({ ok: true });

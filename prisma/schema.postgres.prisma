@@ -1052,7 +1052,7 @@ model SafetySettings {
   enabled            Boolean  @default(true)
   soundEnabled       Boolean  @default(true)
   hapticEnabled      Boolean  @default(true)
-  autoCallEmergency  Boolean  @default(false)
+  autoCallEmergency  Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 }

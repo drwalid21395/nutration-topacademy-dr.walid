@@ -10,7 +10,8 @@ import { assessRisk, triggerAlert, checkFalseAlarmProtection, isInCooldown } fro
 import { prisma as db } from '@/lib/prisma';
 
 export async function POST(req: NextRequest) {
-  const user = await getApiUser(req);
+  let user = await getApiUser(req);
+  if (!user) user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'يجب تسجيل الدخول' }, { status: 401 });
 
   const ip = req.headers.get('x-forwarded-for') ?? 'unknown';
