@@ -164,7 +164,7 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
           <Card className="mb-6 p-5 border-2 border-blue-200 bg-blue-50">
             <div className="flex items-center gap-2 mb-3">
               <HeartPulse className="h-5 w-5 text-blue-600" />
-              <h2 className="text-sm font-black text-blue-800">录入 قراءة الساعة الحية</h2>
+              <h2 className="text-sm font-black text-blue-800">إدخال قراءة الساعة الحية</h2>
             </div>
             <p className="text-xs text-blue-700 mb-3">
               اقرأ النبض والأكسجين من ساعتك وادخلهم هنا — السيرفر يقيّم الخطر فورًا ويتصل بالرقم المسجل عند الطوارئ
