@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as dev;
 import 'package:health/health.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api_client.dart';
@@ -22,6 +23,7 @@ class SafetyMonitor {
   void start() {
     if (_active) return;
     _active = true;
+    dev.log('SafetyMonitor: started', name: 'safety');
     _tick();
     _timer = Timer.periodic(const Duration(seconds: 15), (_) => _tick());
   }
@@ -30,6 +32,7 @@ class SafetyMonitor {
     _active = false;
     _timer?.cancel();
     _timer = null;
+    dev.log('SafetyMonitor: stopped', name: 'safety');
   }
 
   void dispose() {
@@ -40,7 +43,8 @@ class SafetyMonitor {
     if (!_active) return;
     try {
       final now = DateTime.now();
-      final start = now.subtract(const Duration(minutes: 2));
+      // توسيع النافذة إلى 30 دقيقة لضمان التقاط أحدث قراءة من الساعة
+      final start = now.subtract(const Duration(minutes: 30));
 
       final hrPoints = await health.queryPoints(
         const [HealthDataType.HEART_RATE],
@@ -65,6 +69,7 @@ class SafetyMonitor {
         }
         final avg = sum / hrPoints.length;
         if (avg > 0) hr = avg.round();
+        dev.log('SafetyMonitor: HR=$hr from ${hrPoints.length} points', name: 'safety');
       }
 
       int? spo;
@@ -76,9 +81,13 @@ class SafetyMonitor {
         }
         final avg = (sum / spoPoints.length) * 100;
         if (avg > 0 && avg <= 100) spo = avg.round();
+        dev.log('SafetyMonitor: SpO2=$spo from ${spoPoints.length} points', name: 'safety');
       }
 
-      if (hr == null && spo == null) return;
+      if (hr == null && spo == null) {
+        dev.log('SafetyMonitor: no HR or SpO2 data available', name: 'safety');
+        return;
+      }
 
       final payload = <String, dynamic>{
         'timestamp': now.toIso8601String(),
@@ -96,8 +105,21 @@ class SafetyMonitor {
           await _handleEmergency(alertId);
         }
       }
-    } catch (_) {
-      // لا نكسر المراقبة عند خطأ مؤقت
+
+      // إرسال النبض أيضًا كنشاط يومي (DailyActivity) لضمان ظهوره في الداشبورد
+      if (hr != null) {
+        try {
+          await api.pushActivity({
+            'date': now.toIso8601String(),
+            'avgHeartRate': hr,
+            if (spo != null) 'avgSpo2': spo,
+          });
+        } catch (_) {
+          // فشل إرسال النشاط اليومي — غير حرج
+        }
+      }
+    } catch (e) {
+      dev.log('SafetyMonitor tick error: $e', name: 'safety');
     }
   }
 

@@ -13,7 +13,7 @@ class AppConfig {
   static const int backfillDays = 7;
 
   /// فترة إعادة المحاولة التلقائية للخلفية بالثواني (بين المزامنات).
-  static const int autoSyncIntervalSeconds = 1800;
+  static const int autoSyncIntervalSeconds = 300;
 
   /// أقصى عدد أيام تُرسل في دفعة واحدة (حماية للحدود).
   static const int maxDaysPerBatch = 7;

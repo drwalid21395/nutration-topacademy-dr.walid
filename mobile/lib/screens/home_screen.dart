@@ -29,6 +29,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _load();
+    // محاولة بدء المراقبة تلقائيًا إذا كانت الأذونات ممنوحة مسبقًا
+    _tryAutoStart();
     _autoTimer = Timer.periodic(
       const Duration(seconds: AppConfig.autoSyncIntervalSeconds),
       (_) => _sync(auto: true),
@@ -47,6 +49,24 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _lastSync = ls);
   }
 
+  /// محاولة بدء المراقبة تلقائيًا عند فتح التطبيق
+  Future<void> _tryAutoStart() async {
+    final health = HealthBridge();
+    final ok = await health.init();
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _health = health;
+        _healthStatus = health.isAndroid
+            ? 'متصل بـ Health Connect ✓'
+            : 'متصل بـ Apple Health ✓';
+      });
+      _startSafety(health);
+      // مزامنة تلقائية أولية
+      _sync(auto: true);
+    }
+  }
+
   Future<void> _grantPermissions() async {
     setState(() {
       _busy = true;
@@ -62,7 +82,10 @@ class _HomeScreenState extends State<HomeScreen> {
           : 'تعذر منح الأذونات: ${health.lastError}';
       _busy = false;
     });
-    if (ok) _startSafety(health);
+    if (ok) {
+      _startSafety(health);
+      _sync(auto: true);
+    }
   }
 
   void _startSafety(HealthBridge health) {
@@ -93,7 +116,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_busy) return;
     final health = _health;
     if (health == null) {
-      setState(() => _lastMessage = 'اربط المجمّع الصحي أولًا (زر «منح الأذونات»).');
+      if (!auto) {
+        setState(() => _lastMessage = 'اربط المجمّع الصحي أولًا (زر «منح الأذونات»).');
+      }
       return;
     }
     setState(() {
