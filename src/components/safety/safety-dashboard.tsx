@@ -15,7 +15,7 @@ import {
   MapPin,
   CheckCircle2,
   Send,
-  RefreshCw,
+  XCircle,
 } from 'lucide-react';
 import { Card, Badge, Alert } from '@/components/ui';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,8 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState<string | null>(null);
   const [riskResult, setRiskResult] = useState<Record<string, unknown> | null>(null);
+  const [lastSubmittedHr, setLastSubmittedHr] = useState<number | null>(null);
+  const [pulseEffect, setPulseEffect] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -71,7 +73,7 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 15000);
+    const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, [load]);
 
@@ -98,11 +100,16 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
         setSubmitMsg('خطأ: ' + data.error);
       } else {
         setRiskResult(data.risk ?? null);
+        setLastSubmittedHr(hrVal);
+        setPulseEffect(true);
+        setTimeout(() => setPulseEffect(false), 2000);
         const level = data.risk?.level;
         if (level === 'critical') setSubmitMsg('تم رصد حالة طوارئ محتملة — تحقق من السبّاح فورًا!');
         else if (level === 'warning') setSubmitMsg('تم رصد تحذير — علامات حيوية غير طبيعية');
         else if (level === 'attention') setSubmitMsg('تم التسجيل — ملاحظة على القراءة');
         else setSubmitMsg('تم تسجيل القراءة — الحالة طبيعية ✓');
+        setHr('');
+        setSpo2('');
         load();
       }
     } catch {
@@ -133,6 +140,8 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
   const riskMeta = RISK_LABELS[overallLevel as keyof typeof RISK_LABELS] ?? RISK_LABELS.normal;
 
   const v = status?.latestVitals as Record<string, unknown> | null;
+  const dataSource = v?.provider as string | undefined;
+  const heartRateValue = (v?.heartRate as number) ?? lastSubmittedHr;
 
   return (
     <AppShell user={user}>
@@ -167,7 +176,7 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
               <h2 className="text-sm font-black text-blue-800">إدخال قراءة الساعة الحية</h2>
             </div>
             <p className="text-xs text-blue-700 mb-3">
-              اقرأ النبض والأكسجين من ساعتك وادخلهم هنا — السيرفر يقيّم الخطر فورًا ويتصل بالرقم المسجل عند الطوارئ
+              اقرأ النبض من ساعتك وأدخله هنا — السيرفر يقيّم الخطر فورًا ويتصل بالرقم المسجل عند الطوارئ
             </p>
             <div className="flex flex-wrap items-end gap-3">
               <label className="block">
@@ -179,7 +188,8 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
                   value={hr}
                   onChange={(e) => setHr(e.target.value)}
                   placeholder="مثال: 81"
-                  className="w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitVitals(); }}
+                  className="w-36 rounded-lg border border-slate-300 px-3 py-2.5 text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                 />
               </label>
               <label className="block">
@@ -191,25 +201,27 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
                   value={spo2}
                   onChange={(e) => setSpo2(e.target.value)}
                   placeholder="اختياري"
-                  className="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitVitals(); }}
+                  className="w-28 rounded-lg border border-slate-300 px-3 py-2.5 text-base font-bold focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
                 />
               </label>
               <Button
                 loading={submitting}
                 onClick={submitVitals}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5"
               >
                 <Send className="h-4 w-4" />
                 تسجيل القراءة
               </Button>
             </div>
             {submitMsg && (
-              <div className={`mt-3 text-xs font-bold px-3 py-2 rounded ${
+              <div className={`mt-3 text-xs font-bold px-3 py-2 rounded flex items-center gap-2 ${
                 submitMsg.includes('طوارئ') ? 'bg-red-100 text-red-700' :
                 submitMsg.includes('تحذير') ? 'bg-orange-100 text-orange-700' :
                 submitMsg.includes('ملاحظة') ? 'bg-amber-100 text-amber-700' :
                 'bg-green-100 text-green-700'
               }`}>
+                {submitMsg.includes('طوارئ') ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                 {submitMsg}
               </div>
             )}
@@ -246,6 +258,11 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
               <span>{status?.watchConnected ? '🟢 متصل' : '⚪ غير متصل'}</span>
               <span>البطارية: {status?.batteryLevel != null ? `${status.batteryLevel}%` : '—'}</span>
               <span>آخر تحديث: {status?.lastUpdateAgo}</span>
+              {dataSource && (
+                <span className="text-blue-600 font-bold">
+                  المصدر: {dataSource === 'manual' ? 'إدخال يدوي' : dataSource === 'mobile' ? 'تطبيق الجوال' : dataSource}
+                </span>
+              )}
             </div>
           </Card>
 
@@ -274,9 +291,14 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
           {/* المؤشرات الحيوية */}
           <h2 className="mb-3 text-base font-bold text-ocean-900">العلامات الحيوية</h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 mb-6">
-            <VitalCard icon={<HeartPulse className="h-5 w-5 text-red-500" />} label="معدل ضربات القلب"
-              value={v?.heartRate as number} unit="نبضة/د"
-              warn={v ? ((v.heartRate as number) > 180 || (v.heartRate as number) < 50) : false} />
+            <VitalCard
+              icon={<HeartPulse className={`h-5 w-5 text-red-500 ${pulseEffect ? 'animate-bounce' : ''}`} />}
+              label="معدل ضربات القلب"
+              value={heartRateValue}
+              unit="نبضة/د"
+              warn={heartRateValue != null && (heartRateValue > 180 || heartRateValue < 50)}
+              pulse={pulseEffect}
+            />
             <VitalCard icon={<Activity className="h-5 w-5 text-blue-500" />} label="تشبع الأكسجين"
               value={v?.spo2 as number} unit="%"
               warn={v ? ((v.spo2 as number) < 92) : false} />
@@ -335,16 +357,20 @@ export function SafetyDashboard({ user }: { user: SessionUser }) {
   );
 }
 
-function VitalCard({ icon, label, value, unit, warn, text }: {
+function VitalCard({ icon, label, value, unit, warn, text, pulse }: {
   icon: React.ReactNode;
   label: string;
   value: number | string | null | undefined;
   unit: string;
   warn?: boolean;
   text?: boolean;
+  pulse?: boolean;
 }) {
   return (
-    <Card className={`p-3 ${warn ? 'border-red-300 bg-red-50' : ''}`}>
+    <Card className={`p-3 transition-all duration-300 ${
+      pulse ? 'border-red-400 bg-red-50 scale-105 shadow-lg' :
+      warn ? 'border-red-300 bg-red-50' : ''
+    }`}>
       <div className="flex items-center gap-2 mb-1">
         {icon}
         <span className="text-xs font-bold text-slate-500">{label}</span>
